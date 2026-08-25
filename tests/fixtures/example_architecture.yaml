@@ -1,0 +1,134 @@
+# Canonical-model-level fixture for the 4-service test landscape from spec §20.3
+# (OrderService, ProductService, PaymentService, InvoiceService), plus the two
+# extra queue fixtures required by spec §21 for analyses A3/A4:
+#   - unused-q: has a sender, no consumer
+#   - unknown-producer-q: has a consumer, no known sender
+#
+# This fixture represents already-canonical entities (not raw OpenAPI/AsyncAPI
+# source documents - those land in examples/*/ once the adapters exist in
+# Iterations 2-4). It is loaded and validated as a full ArchitectureModel in
+# tests/unit/test_canonical_model.py.
+
+services:
+  - id: service:order-service
+    name: OrderService
+  - id: service:product-service
+    name: ProductService
+  - id: service:payment-service
+    name: PaymentService
+  - id: service:invoice-service
+    name: InvoiceService
+
+operations:
+  - id: "operation:product-service:GET:/products/{id}"
+    service_id: service:product-service
+    operation_id: getProduct
+    method: GET
+    path: /products/{id}
+    response_schema_ids:
+      - schema:Product:v1
+
+queues:
+  - id: queue:payment-q
+    name: payment-q
+    protocol: AMQP
+  - id: queue:invoice-q
+    name: invoice-q
+    protocol: AMQP
+  - id: queue:unused-q
+    name: unused-q
+    protocol: AMQP
+  - id: queue:unknown-producer-q
+    name: unknown-producer-q
+    protocol: AMQP
+
+messages:
+  - id: message:PaymentRequested:v2
+    name: PaymentRequested
+    version: v2
+    schema_id: schema:PaymentRequested:v2
+  - id: message:InvoiceCreated:v1
+    name: InvoiceCreated
+    version: v1
+    schema_id: schema:InvoiceCreated:v1
+
+schemas:
+  - id: schema:Product:v1
+    name: Product
+    version: v1
+    format: json
+  - id: schema:PaymentRequested:v2
+    name: PaymentRequested
+    version: v2
+    format: json
+  - id: schema:InvoiceCreated:v1
+    name: InvoiceCreated
+    version: v1
+    format: json
+
+relations:
+  # REST: OrderService -> ProductService (spec §11.3 example graph)
+  - type: PROVIDES
+    source_id: service:product-service
+    target_id: "operation:product-service:GET:/products/{id}"
+  - type: CALLS
+    source_id: service:order-service
+    target_id: "operation:product-service:GET:/products/{id}"
+  - type: RESPONSE_SCHEMA
+    source_id: "operation:product-service:GET:/products/{id}"
+    target_id: schema:Product:v1
+
+  # Async: OrderService -> payment-q -> PaymentService
+  - type: SENDS
+    source_id: service:order-service
+    target_id: queue:payment-q
+  - type: RECEIVES_FROM
+    source_id: service:payment-service
+    target_id: queue:payment-q
+  - type: CARRIES
+    source_id: queue:payment-q
+    target_id: message:PaymentRequested:v2
+  - type: CONFORMS_TO
+    source_id: message:PaymentRequested:v2
+    target_id: schema:PaymentRequested:v2
+
+  # Async: PaymentService -> invoice-q -> InvoiceService
+  - type: SENDS
+    source_id: service:payment-service
+    target_id: queue:invoice-q
+  - type: RECEIVES_FROM
+    source_id: service:invoice-service
+    target_id: queue:invoice-q
+  - type: CARRIES
+    source_id: queue:invoice-q
+    target_id: message:InvoiceCreated:v1
+  - type: CONFORMS_TO
+    source_id: message:InvoiceCreated:v1
+    target_id: schema:InvoiceCreated:v1
+
+  # A3 fixture: unused-q has a sender but no consumer
+  - type: SENDS
+    source_id: service:order-service
+    target_id: queue:unused-q
+
+  # A4 fixture: unknown-producer-q has a consumer but no known sender
+  - type: RECEIVES_FROM
+    source_id: service:payment-service
+    target_id: queue:unknown-producer-q
+
+provenance:
+  - source_type: OPENAPI
+    source_file: examples/product-service/openapi.yaml
+    evidence_type: DECLARED
+  - source_type: OPENAPI
+    source_file: examples/order-service/openapi.yaml
+    evidence_type: DECLARED
+  - source_type: ASYNCAPI
+    source_file: examples/order-service/asyncapi.yaml
+    evidence_type: DECLARED
+  - source_type: ASYNCAPI
+    source_file: examples/payment-service/asyncapi.yaml
+    evidence_type: DECLARED
+  - source_type: MANIFEST
+    source_file: examples/order-service/architecture.yaml
+    evidence_type: DECLARED
