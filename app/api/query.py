@@ -1,5 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+
+from app.ai.question_service import ArchitectureQuestionService
+from app.deps import get_question_service
 
 router = APIRouter(prefix="/api/query", tags=["query"])
 
@@ -16,11 +19,11 @@ class QueryResponse(BaseModel):
 
 
 @router.post("")
-def post_query(request: QueryRequest) -> QueryResponse:
-    """POST /api/query stub (spec §14) - wired to the real AI subsystem in Iteration 8."""
+def post_query(
+    request: QueryRequest, service: ArchitectureQuestionService = Depends(get_question_service)
+) -> QueryResponse:
+    """POST /api/query: natural-language question -> validated read-only Cypher -> answer (spec §14/§15)."""
+    result = service.ask(request.question)
     return QueryResponse(
-        question=request.question,
-        cypher=None,
-        rows=[],
-        answer="Natural language query is not implemented yet (Iteration 8).",
+        question=result.question, cypher=result.cypher, rows=result.rows, answer=result.answer
     )

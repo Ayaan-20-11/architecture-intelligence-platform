@@ -8,7 +8,7 @@ from fastapi.templating import Jinja2Templates
 from app.analysis.blast_radius import blast_radius
 from app.analysis.queues import consumers_of_queue, senders_of_queue
 from app.api.query import QueryResponse
-from app.deps import get_read_session
+from app.deps import build_question_service, get_read_session
 
 router = APIRouter(tags=["ui"])
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
@@ -108,12 +108,22 @@ def queue_explorer(
 def query_page(request: Request, question: str | None = None):
     result = None
     if question:
-        result = QueryResponse(
-            question=question,
-            cypher=None,
-            rows=[],
-            answer="Natural language query is not implemented yet (Iteration 8).",
-        )
+        service = build_question_service(request)
+        if service is None:
+            result = QueryResponse(
+                question=question,
+                cypher=None,
+                rows=[],
+                answer="Natural language query is not configured (missing ANTHROPIC_API_KEY, or llm.enabled is false in config.yaml).",
+            )
+        else:
+            answer_result = service.ask(question)
+            result = QueryResponse(
+                question=answer_result.question,
+                cypher=answer_result.cypher,
+                rows=answer_result.rows,
+                answer=answer_result.answer,
+            )
     return templates.TemplateResponse(
         request, "query.html", {"question": question, "result": result}
     )

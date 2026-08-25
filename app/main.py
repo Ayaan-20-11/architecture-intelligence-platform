@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI
 from fastapi.responses import JSONResponse
 
+from app.ai.provider import AnthropicProvider
 from app.api import analysis, import_api, messages, query, queues, services, ui
 from app.deps import get_driver, get_settings
 from app.graph.repository import build_driver, open_session
@@ -20,6 +21,10 @@ async def lifespan(app: FastAPI):
     app.state.driver = build_driver(
         settings.config.graph.uri, settings.secrets.neo4j_user, settings.secrets.neo4j_password
     )
+    if settings.config.llm.enabled and settings.secrets.anthropic_api_key:
+        app.state.llm_provider = AnthropicProvider(api_key=settings.secrets.anthropic_api_key)
+    else:
+        app.state.llm_provider = None
     yield
     app.state.driver.close()
 

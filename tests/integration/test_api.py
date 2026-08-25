@@ -33,10 +33,23 @@ def populated_graph(driver):
     import_all_sources(driver, database=DATABASE, root=EXAMPLES_DIR)
 
 
-@pytest.fixture
-def client(driver):
+class FakeProvider:
+    """No real Anthropic calls: fixed Cypher, deterministic answer."""
+
+    def __init__(self, cypher: str = "MATCH (s:Service) RETURN s.name AS name"):
+        self.cypher = cypher
+
+    def generate_cypher(self, *, question: str, schema_description: str) -> str:
+        return self.cypher
+
+    def compose_answer(self, *, question: str, cypher: str, rows: list[dict]) -> str:
+        return f"Found {len(rows)} row(s)."
+
+
+def _build_app(driver, *, llm_provider=None):
     app = create_app()
     app.state.driver = driver
+    app.state.llm_provider = llm_provider
     app.state.settings = Settings(
         config=AppConfig.model_validate(
             {
@@ -46,7 +59,17 @@ def client(driver):
         ),
         secrets=Secrets(neo4j_user="neo4j", neo4j_password="ignored", anthropic_api_key=None),
     )
-    return TestClient(app)
+    return app
+
+
+@pytest.fixture
+def client(driver):
+    return TestClient(_build_app(driver))
+
+
+@pytest.fixture
+def client_with_llm(driver):
+    return TestClient(_build_app(driver, llm_provider=FakeProvider()))
 
 
 def test_health(client):
@@ -193,13 +216,19 @@ def test_post_import_service_not_found(client):
     assert response.status_code == 404
 
 
-def test_post_query_stub(client):
+def test_post_query_without_provider_configured_returns_503(client):
     response = client.post("/api/query", json={"question": "who sends payment-q?"})
+    assert response.status_code == 503
+
+
+def test_post_query_with_configured_provider_returns_real_answer(client_with_llm):
+    response = client_with_llm.post("/api/query", json={"question": "who sends payment-q?"})
     assert response.status_code == 200
     body = response.json()
     assert body["question"] == "who sends payment-q?"
-    assert body["rows"] == []
-    assert "Iteration 8" in body["answer"]
+    assert body["cypher"] == "MATCH (s:Service) RETURN s.name AS name LIMIT 100"
+    assert len(body["rows"]) == 4
+    assert body["answer"] == "Found 4 row(s)."
 
 
 def test_ui_index_lists_services_and_queues(client):
@@ -242,8 +271,15 @@ def test_ui_query_page_empty_state(client):
     assert "Natural Language Query" in response.text
 
 
-def test_ui_query_page_with_question(client):
+def test_ui_query_page_with_question_and_no_provider_shows_not_configured(client):
     response = client.get("/query", params={"question": "who sends payment-q?"})
     assert response.status_code == 200
     assert "who sends payment-q?" in response.text
-    assert "Iteration 8" in response.text
+    assert "not configured" in response.text
+
+
+def test_ui_query_page_with_question_and_provider_shows_real_answer(client_with_llm):
+    response = client_with_llm.get("/query", params={"question": "who sends payment-q?"})
+    assert response.status_code == 200
+    assert "who sends payment-q?" in response.text
+    assert "Found 4 row(s)." in response.text
