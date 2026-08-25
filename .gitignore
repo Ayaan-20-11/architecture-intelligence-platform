@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# uv / venv
+.venv/
+.python-version
+
+# Environment secrets (spec: NEO4J_USER, NEO4J_PASSWORD, ANTHROPIC_API_KEY)
+.env
+.env.*
+!.env.example
+
+# Local Neo4j data (docker-compose volumes)
+neo4j-data/
+neo4j-logs/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# PDF Windows zone-identifier stream
+*:Zone.Identifier
