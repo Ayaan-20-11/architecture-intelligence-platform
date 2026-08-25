@@ -1,3 +1,4 @@
+from collections import defaultdict
 from pathlib import Path
 
 from app.canonical.model import ArchitectureModel, Message, Operation, Queue, Schema, Service
@@ -54,15 +55,15 @@ def merge_models(models: list[ArchitectureModel]) -> ArchitectureModel:
     )
 
 
-def import_sources(root: Path) -> ArchitectureModel:
-    """Runs scan -> parse -> source-validate -> map -> merge -> canonical-validate (spec §5.2); raises without returning a partial model on any failure (V9/AC14)."""
+def parse_sources(root: Path) -> dict[str, ArchitectureModel]:
+    """Scans, source-validates, and parses every source into one merged ArchitectureModel per service_id (spec §5.2); the importer needs this per-service scoping for §12.2 reimport."""
     sources = scan_directory(root)
 
     openapi_sources = [s for s in sources if s.type == SpecificationType.OPENAPI]
     asyncapi_sources = [s for s in sources if s.type == SpecificationType.ASYNCAPI]
     manifest_sources = [s for s in sources if s.type == SpecificationType.MANIFEST]
 
-    partial_models: list[ArchitectureModel] = []
+    partials_by_service: dict[str, list[ArchitectureModel]] = defaultdict(list)
     operation_index: dict[tuple[str, str], str] = {}
 
     for source in openapi_sources:
@@ -74,7 +75,7 @@ def import_sources(root: Path) -> ArchitectureModel:
             source_file=str(source.path),
             source_revision=source.revision,
         )
-        partial_models.append(model)
+        partials_by_service[source.service_id].append(model)
         for operation in model.operations:
             if operation.operation_id:
                 operation_index[(source.service_id, operation.operation_id)] = operation.id
@@ -82,7 +83,7 @@ def import_sources(root: Path) -> ArchitectureModel:
     for source in asyncapi_sources:
         document = load_asyncapi_document(source.path)
         validate_asyncapi_document(document, source_file=str(source.path))
-        partial_models.append(
+        partials_by_service[source.service_id].append(
             parse_asyncapi(
                 document,
                 service_id=source.service_id,
@@ -94,7 +95,7 @@ def import_sources(root: Path) -> ArchitectureModel:
     for source in manifest_sources:
         document = load_manifest_document(source.path)
         validate_manifest_document(document, source_file=str(source.path))
-        partial_models.append(
+        partials_by_service[source.service_id].append(
             parse_manifest(
                 document,
                 source_file=str(source.path),
@@ -103,6 +104,11 @@ def import_sources(root: Path) -> ArchitectureModel:
             )
         )
 
-    merged = merge_models(partial_models)
+    return {service_id: merge_models(models) for service_id, models in partials_by_service.items()}
+
+
+def import_sources(root: Path) -> ArchitectureModel:
+    """Runs scan -> parse -> source-validate -> map -> merge -> canonical-validate (spec §5.2); raises without returning a partial model on any failure (V9/AC14)."""
+    merged = merge_models(list(parse_sources(root).values()))
     validate_canonical_model(merged)
     return merged
