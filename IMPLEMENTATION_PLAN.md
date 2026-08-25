@@ -15,7 +15,7 @@ with its rationale:
 | Package/dependency manager | [`uv`](https://docs.astral.sh/uv/) | Already available in this environment; can install/pin Python 3.13 itself even though system Python is 3.12; works cleanly with `pyproject.toml` as required by spec §3. |
 | Linter/formatter | `ruff` | Spec §3's tech table names no linter; ruff is a fast, low-overhead default for a Python PoC. |
 | Minimal UI rendering (§16 explicitly allows either) | Server-rendered HTML via FastAPI + Jinja2 | Avoids a second (React/Node) build toolchain for a UI the spec itself calls "not core to the PoC." |
-| LLM provider (§15.5 requires a swappable interface but doesn't pick a vendor) | Anthropic Claude | First concrete implementation behind the required provider abstraction. |
+| LLM provider (§15.5 requires a swappable interface but doesn't pick a vendor) | OpenAI (gpt-4o-mini) | First concrete implementation behind the required provider abstraction; started as Anthropic Claude, switched to OpenAI in Iteration 8 at the user's request. |
 
 **Docker status:** available (Docker 29.7.2, Compose v5.3.1; `docker ps` succeeds). Iterations 5–6, which
 need a real Neo4j for their integration tests (Testcontainers per §20.2), are no longer blocked.
@@ -33,7 +33,7 @@ pytest itself via `sg docker -c "uv run pytest tests/integration"`, or start a f
 
 - `git init` + `.gitignore` (Python bytecode, `.venv`, `uv.lock` policy, local Neo4j data volumes).
 - `uv init --python 3.13`, then:
-  - `uv add fastapi "uvicorn[standard]" "pydantic>=2" pyyaml jsonschema neo4j anthropic jinja2`
+  - `uv add fastapi "uvicorn[standard]" "pydantic>=2" pyyaml jsonschema neo4j openai jinja2`
   - `uv add --dev pytest pytest-asyncio testcontainers httpx ruff`
 - Create the repo skeleton exactly as specified in §22:
   ```
@@ -139,7 +139,7 @@ Testcontainers is available.
 Spec §14, §16. **Exit criterion:** service/queue/analysis visible.
 
 - `app/settings.py` — config loader for the YAML shape in §17.1 plus env secrets `NEO4J_USER`,
-  `NEO4J_PASSWORD`, `ANTHROPIC_API_KEY` (renamed from spec's generic `LLM_API_KEY` per the Claude
+  `NEO4J_PASSWORD`, `OPENAI_API_KEY` (renamed from spec's generic `LLM_API_KEY` per the OpenAI
   provider decision). Never persisted in repo or graph properties (§17.2, §19).
 - `app/main.py` — FastAPI app wiring, health endpoints for app + Neo4j connectivity (§18).
 - `app/api/{services,queues,messages,analysis,import_api}.py` — implement exactly the endpoint table in
@@ -153,9 +153,9 @@ Spec §14, §16. **Exit criterion:** service/queue/analysis visible.
 ## Iteration 8 — LLM query + validator
 Spec §15. **Exit criterion:** NL question → read-only Cypher → answer.
 
-- `app/ai/provider.py` — a `Protocol`/ABC provider interface plus a Claude implementation (Anthropic
-  Messages API, structured/tool-use output for Cypher generation), keeping the interface swappable per
-  §15.5.
+- `app/ai/provider.py` — a `Protocol` provider interface plus an OpenAI implementation (Chat Completions
+  API, `chat.completions.parse()` structured-output for Cypher generation), keeping the interface
+  swappable per §15.5.
 - `app/ai/cypher_generator.py` — question + fixed graph schema (node labels/relation types from §11) →
   candidate Cypher via the provider.
 - `app/ai/cypher_validator.py` — **security-critical.** Allowlist only `MATCH`, `OPTIONAL MATCH`,
@@ -185,7 +185,7 @@ Iterations 0 and 1 need no Neo4j/Docker and can start immediately:
 
 ```bash
 uv init --python 3.13
-uv add fastapi "uvicorn[standard]" "pydantic>=2" pyyaml jsonschema neo4j anthropic jinja2
+uv add fastapi "uvicorn[standard]" "pydantic>=2" pyyaml jsonschema neo4j openai jinja2
 uv add --dev pytest pytest-asyncio testcontainers httpx ruff
 ```
 

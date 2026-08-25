@@ -34,7 +34,7 @@ def populated_graph(driver):
 
 
 class FakeProvider:
-    """No real Anthropic calls: fixed Cypher, deterministic answer."""
+    """No real OpenAI calls: fixed Cypher, deterministic answer."""
 
     def __init__(self, cypher: str = "MATCH (s:Service) RETURN s.name AS name"):
         self.cypher = cypher
@@ -57,7 +57,7 @@ def _build_app(driver, *, llm_provider=None):
                 "graph": {"uri": "bolt://ignored:7687", "database": DATABASE},
             }
         ),
-        secrets=Secrets(neo4j_user="neo4j", neo4j_password="ignored", anthropic_api_key=None),
+        secrets=Secrets(neo4j_user="neo4j", neo4j_password="ignored", openai_api_key=None),
     )
     return app
 

@@ -12,7 +12,7 @@ DATABASE = "neo4j"
 
 
 class FakeProvider:
-    """No real Anthropic calls: fixed Cypher, and an answer that just echoes row count."""
+    """No real OpenAI calls: fixed Cypher, and an answer that just echoes row count."""
 
     def __init__(self, cypher: str):
         self.cypher = cypher

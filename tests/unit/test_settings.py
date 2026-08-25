@@ -61,24 +61,24 @@ def test_neo4j_uri_env_var_overrides_config(tmp_path, monkeypatch):
 def test_load_secrets_reads_environment(monkeypatch):
     monkeypatch.setenv("NEO4J_USER", "custom-user")
     monkeypatch.setenv("NEO4J_PASSWORD", "secret")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
 
     secrets = load_secrets()
 
     assert secrets.neo4j_user == "custom-user"
     assert secrets.neo4j_password == "secret"
-    assert secrets.anthropic_api_key == "sk-test"
+    assert secrets.openai_api_key == "sk-test"
 
 
 def test_load_secrets_defaults_neo4j_user(monkeypatch):
     monkeypatch.delenv("NEO4J_USER", raising=False)
     monkeypatch.setenv("NEO4J_PASSWORD", "secret")
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
     secrets = load_secrets()
 
     assert secrets.neo4j_user == "neo4j"
-    assert secrets.anthropic_api_key is None
+    assert secrets.openai_api_key is None
 
 
 def test_load_secrets_raises_without_password(monkeypatch):

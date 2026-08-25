@@ -39,7 +39,7 @@ class AppConfig(BaseModel):
 class Secrets(BaseModel):
     neo4j_user: str
     neo4j_password: str
-    anthropic_api_key: str | None = None
+    openai_api_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -68,11 +68,11 @@ def load_config(path: Path) -> AppConfig:
 
 
 def load_secrets() -> Secrets:
-    """Reads NEO4J_USER/NEO4J_PASSWORD/ANTHROPIC_API_KEY from the environment (spec §17.2) - never from the repo."""
+    """Reads NEO4J_USER/NEO4J_PASSWORD/OPENAI_API_KEY from the environment (spec §17.2) - never from the repo."""
     return Secrets(
         neo4j_user=os.environ.get("NEO4J_USER", "neo4j"),
         neo4j_password=_require_env("NEO4J_PASSWORD"),
-        anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY"),
+        openai_api_key=os.environ.get("OPENAI_API_KEY"),
     )
 
 

@@ -10,9 +10,9 @@ in one Neo4j-backed model, with deterministic Cypher analyses and a read-only LL
 
 ## Status
 
-Through Iteration 7 of `IMPLEMENTATION_PLAN.md`: canonical model, OpenAPI/AsyncAPI/manifest adapters,
-ingestion pipeline + validation, Neo4j importer, the five standard analyses, and a FastAPI app with a
-minimal server-rendered UI. The LLM query subsystem (Iteration 8) is stubbed but not yet implemented.
+Through Iteration 8 of `IMPLEMENTATION_PLAN.md`: canonical model, OpenAPI/AsyncAPI/manifest adapters,
+ingestion pipeline + validation, Neo4j importer, the five standard analyses, a FastAPI app with a
+minimal server-rendered UI, and the LLM query subsystem (OpenAI-backed).
 
 ## Development
 
@@ -24,11 +24,12 @@ uv run ruff check .                    # lint
 uv run ruff format .                   # format
 ```
 
-Copy `.env.example` to `.env` and fill in `NEO4J_PASSWORD` (and `ANTHROPIC_API_KEY`, once Iteration 8
-wires the LLM subsystem). To run the app locally against a Neo4j you start yourself:
+Copy `.env.example` to `.env` and fill in `NEO4J_PASSWORD` and `OPENAI_API_KEY` (the LLM query
+subsystem is disabled with a friendly message if `OPENAI_API_KEY` is unset). To run the app locally
+against a Neo4j you start yourself:
 
 ```bash
-export NEO4J_PASSWORD=devpassword     # and NEO4J_USER/ANTHROPIC_API_KEY as needed
+export NEO4J_PASSWORD=devpassword     # and NEO4J_USER/OPENAI_API_KEY as needed
 uv run uvicorn app.main:app --reload
 ```
 

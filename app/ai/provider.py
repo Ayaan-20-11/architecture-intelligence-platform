@@ -1,9 +1,9 @@
 from typing import Protocol
 
-import anthropic
+import openai
 from pydantic import BaseModel
 
-MODEL = "claude-opus-4-8"
+MODEL = "gpt-4o-mini"
 
 
 class LLMProviderError(RuntimeError):
@@ -42,36 +42,38 @@ _ANSWER_SYSTEM_PROMPT = (
 )
 
 
-class AnthropicProvider:
+class OpenAIProvider:
     def __init__(self, api_key: str, *, model: str = MODEL):
-        self._client = anthropic.Anthropic(api_key=api_key)
+        self._client = openai.OpenAI(api_key=api_key)
         self._model = model
 
     def generate_cypher(self, *, question: str, schema_description: str) -> str:
         user_message = f"Graph schema:\n{schema_description}\n\nQuestion: {question}"
         try:
-            response = self._client.messages.parse(
+            response = self._client.chat.completions.parse(
                 model=self._model,
-                max_tokens=1024,
-                system=_CYPHER_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_message}],
-                output_format=_CypherGenerationResult,
+                messages=[
+                    {"role": "system", "content": _CYPHER_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_message},
+                ],
+                response_format=_CypherGenerationResult,
             )
-        except anthropic.APIError as exc:
+        except openai.APIError as exc:
             raise LLMProviderError(f"Cypher generation failed: {exc}") from exc
-        return response.parsed_output.cypher
+        return response.choices[0].message.parsed.cypher
 
     def compose_answer(self, *, question: str, cypher: str, rows: list[dict]) -> str:
         user_message = (
             f"Question: {question}\n\nCypher executed:\n{cypher}\n\nResult rows (JSON): {rows}"
         )
         try:
-            response = self._client.messages.create(
+            response = self._client.chat.completions.create(
                 model=self._model,
-                max_tokens=1024,
-                system=_ANSWER_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_message}],
+                messages=[
+                    {"role": "system", "content": _ANSWER_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_message},
+                ],
             )
-        except anthropic.APIError as exc:
+        except openai.APIError as exc:
             raise LLMProviderError(f"Answer composition failed: {exc}") from exc
-        return next(block.text for block in response.content if block.type == "text")
+        return response.choices[0].message.content

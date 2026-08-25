@@ -114,7 +114,7 @@ def query_page(request: Request, question: str | None = None):
                 question=question,
                 cypher=None,
                 rows=[],
-                answer="Natural language query is not configured (missing ANTHROPIC_API_KEY, or llm.enabled is false in config.yaml).",
+                answer="Natural language query is not configured (missing OPENAI_API_KEY, or llm.enabled is false in config.yaml).",
             )
         else:
             answer_result = service.ask(question)

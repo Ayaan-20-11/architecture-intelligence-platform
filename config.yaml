@@ -1,5 +1,5 @@
 # Default PoC configuration (spec §17.1). NEO4J_URI overrides graph.uri (see
-# docker-compose.yml); NEO4J_USER, NEO4J_PASSWORD, ANTHROPIC_API_KEY are read
+# docker-compose.yml); NEO4J_USER, NEO4J_PASSWORD, OPENAI_API_KEY are read
 # from the environment only (spec §17.2), never from this file.
 architecture_intelligence:
   sources:
