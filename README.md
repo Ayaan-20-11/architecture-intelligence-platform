@@ -7,12 +7,15 @@ in one Neo4j-backed model, with deterministic Cypher analyses and a read-only LL
 - Full design: `Architecture_Intelligence_Platform_PoC_Specification_Python.pdf`
 - Engineering task breakdown: `IMPLEMENTATION_PLAN.md`
 - Guidance for AI coding agents working in this repo: `CLAUDE.md`
+- Final PoC review (AC1–AC15, success measures, known gaps): `POC_REVIEW.md`
 
 ## Status
 
-Through Iteration 8 of `IMPLEMENTATION_PLAN.md`: canonical model, OpenAPI/AsyncAPI/manifest adapters,
-ingestion pipeline + validation, Neo4j importer, the five standard analyses, a FastAPI app with a
-minimal server-rendered UI, and the LLM query subsystem (OpenAI-backed).
+All 9 iterations of `IMPLEMENTATION_PLAN.md` complete: canonical model, OpenAPI/AsyncAPI/manifest
+adapters, ingestion pipeline + validation, Neo4j importer, the five standard analyses, a FastAPI app
+with a minimal server-rendered UI, and the LLM query subsystem (OpenAI-backed). See `POC_REVIEW.md` for
+the acceptance-criteria walkthrough and two known open items (live LLM round-trip pending API credits,
+provenance captured but not yet persisted to the graph).
 
 ## Development
 
