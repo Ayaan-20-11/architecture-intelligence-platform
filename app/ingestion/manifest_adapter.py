@@ -47,11 +47,15 @@ def parse_manifest(
             Relation(type="CALLS", source_id=caller_service_id, target_id=target_operation_id)
         )
 
+    evidence = Provenance(
+        id=ids.evidence_id("MANIFEST", document["service"], source_revision),
+        source_type="MANIFEST",
+        source_file=source_file,
+        source_revision=source_revision,
+    )
+    relations = [r.model_copy(update={"evidence_ids": [evidence.id]}) for r in relations]
+
     return ArchitectureModel(
         relations=relations,
-        provenance=[
-            Provenance(
-                source_type="MANIFEST", source_file=source_file, source_revision=source_revision
-            )
-        ],
+        provenance=[evidence],
     )

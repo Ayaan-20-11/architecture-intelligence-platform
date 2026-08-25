@@ -179,6 +179,50 @@ Spec §21, §23.1. No new code — an evaluation pass.
   improves usability without replacing the graph as source of truth; the Canonical Model can absorb a
   future OpenTelemetry source without reworking the OpenAPI/AsyncAPI adapters.
 
+## Iteration 10A — Evidence / Provenance persistence (H1)
+`Architecture_Intelligence_Platform_Core_Hardening_Specification.md` §4. **Exit criterion:** AC13 fully
+met — provenance is queryable in the graph, not just produced by adapters. First of the hardening spec's
+three sub-projects (H1 Evidence, H2 Semantic Validator, H3 Intent Router); built alone per the spec's own
+"don't implement in parallel" guidance — H2/H3 are separate future iterations.
+
+- `app/canonical/ids.py` — `evidence_id(source_type, service_slug, revision=None)` →
+  `evidence:{type}:{service}[:{revision}]`, same optional-trailing-segment convention as the other 5 ID
+  builders. Built from the service slug, never a file path.
+- `app/provenance/model.py::Provenance` — gained a required `id` field. Kept the existing class name
+  (not renamed to `Evidence`) since it's the same concept the spec's own §4.1 starts from; exposed as a
+  graph node labeled `:Evidence` and a `/api/evidence` REST prefix instead.
+- `app/canonical/model.py::Relation` — gained `evidence_ids: list[str] = Field(default_factory=list)`.
+- All three adapters (`openapi_adapter.py`, `asyncapi_adapter.py`, `manifest_adapter.py`) — one evidence
+  record built per adapter call, stamped onto every relation that call produces via `r.model_copy(update=
+  {"evidence_ids": [evidence.id]})` right before the final `return ArchitectureModel(...)`.
+- `app/validation/canonical_validation.py` — new check: every `relation.evidence_ids` entry must appear
+  in the model's `provenance` ids.
+- `app/graph/reconciliation.py::model_node_ids` — now includes provenance/evidence ids, so `Evidence`
+  automatically participates in the existing stale-node detection with no new reconciliation concept.
+- `app/graph/importer.py` — `"provenance": "Evidence"` added to `NODE_LABELS` (the generic node writer
+  then MERGEs `:Evidence` nodes for free); `_MERGE_RELATION_TEMPLATE` extended to accumulate
+  `evidence_ids` on relationships the same way `sources` already accumulates (a relation can be declared
+  by multiple services in separate import transactions — e.g. a shared `CARRIES` edge — and must keep
+  every contributor's evidence); a new stale-evidence-stripping query runs alongside node expiry so a
+  persisting relation loses exactly the evidence of a service that stops declaring it.
+- `app/api/evidence.py` (new) — `GET /api/evidence`, `GET /api/evidence/{id}`. `app/api/services.py` /
+  `queues.py` — `GET .../{id}/evidence` (undirected relationship pattern, one query covers both
+  incoming/outgoing). `GET /api/relations/{relationId}/evidence` intentionally **not** implemented — the
+  spec marks it optional, and `Relation` has no stable ID today.
+- `app/api/ui.py` + `service.html`/`queue.html` — Service/Queue Explorer render `Source: / Revision: /
+  Evidence:` per relation (spec §4.11 mockup), via a small batch-resolve helper (`_attach_evidence`).
+- `app/ai/cypher_generator.py::GRAPH_SCHEMA_DESCRIPTION` — documents the new `Evidence` node and the
+  `evidence_ids` relationship property. No `cypher_validator.py` changes needed — its `KNOWN_NODE_LABELS`
+  already derives from `app.graph.importer.NODE_LABELS`, so `Evidence` became an allowed label
+  automatically.
+- Explicitly deferred: `StrEnum` typing for `source_type`/`evidence_type` (not needed for AC13); real
+  `source_revision` computation in the scanner (evidence IDs stay stable across reimports without it);
+  `answer_composer.py` citing evidence in LLM answers (not in H1's acceptance criteria).
+- 9 new tests (150 unit / 64 integration, up from 143/55): ID builder cases, adapter evidence-stamping
+  assertions, a canonical-validation case, a reconciliation case, and — most importantly — a
+  Testcontainers test proving the same relation accumulates evidence from two independently-importing
+  services and correctly loses just one contributor's evidence on that service's reimport.
+
 ## Getting started
 
 Iterations 0 and 1 need no Neo4j/Docker and can start immediately:

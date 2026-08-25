@@ -243,9 +243,12 @@ def test_provenance_recorded():
         source_revision="abc123",
     )
     [provenance] = model.provenance
+    assert provenance.id == ids.evidence_id("ASYNCAPI", "order-service", "abc123")
     assert provenance.source_type == "ASYNCAPI"
     assert provenance.source_file == "examples/order-service/asyncapi.yaml"
     assert provenance.source_revision == "abc123"
+
+    assert all(r.evidence_ids == [provenance.id] for r in model.relations)
 
 
 def test_real_fixtures_produce_consistent_ids_across_producer_and_consumer():

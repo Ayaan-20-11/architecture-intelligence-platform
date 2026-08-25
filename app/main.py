@@ -6,7 +6,7 @@ from fastapi import Depends, FastAPI
 from fastapi.responses import JSONResponse
 
 from app.ai.provider import OpenAIProvider
-from app.api import analysis, import_api, messages, query, queues, services, ui
+from app.api import analysis, evidence, import_api, messages, query, queues, services, ui
 from app.deps import get_driver, get_settings
 from app.graph.repository import build_driver, open_session
 from app.settings import Settings, load_settings
@@ -39,6 +39,7 @@ def create_app() -> FastAPI:
     app.include_router(analysis.router)
     app.include_router(import_api.router)
     app.include_router(query.router)
+    app.include_router(evidence.router)
     app.include_router(ui.router)
 
     @app.get("/health")

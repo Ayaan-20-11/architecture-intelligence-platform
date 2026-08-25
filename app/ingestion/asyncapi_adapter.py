@@ -143,15 +143,19 @@ def parse_asyncapi(
                     )
                 add_relation("CONFORMS_TO", message_id_value, schema_id_value)
 
+    evidence = Provenance(
+        id=ids.evidence_id("ASYNCAPI", service_id, source_revision),
+        source_type="ASYNCAPI",
+        source_file=source_file,
+        source_revision=source_revision,
+    )
+    relations = [r.model_copy(update={"evidence_ids": [evidence.id]}) for r in relations]
+
     return ArchitectureModel(
         services=[service],
         queues=list(queues_by_id.values()),
         messages=list(messages_by_id.values()),
         schemas=list(schemas_by_id.values()),
         relations=relations,
-        provenance=[
-            Provenance(
-                source_type="ASYNCAPI", source_file=source_file, source_revision=source_revision
-            )
-        ],
+        provenance=[evidence],
     )

@@ -53,6 +53,7 @@ class Relation(BaseModel):
     type: str
     source_id: str
     target_id: str
+    evidence_ids: list[str] = Field(default_factory=list)
 
 
 class ArchitectureModel(BaseModel):

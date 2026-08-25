@@ -1,4 +1,4 @@
-from app.canonical.ids import message_id, operation_id, queue_id, schema_id, service_id
+from app.canonical.ids import evidence_id, message_id, operation_id, queue_id, schema_id, service_id
 
 
 def test_service_id_matches_spec_example():
@@ -36,6 +36,27 @@ def test_message_id_without_version():
 
 def test_schema_id_matches_spec_example():
     assert schema_id("PaymentRequested", "v2") == "schema:PaymentRequested:v2"
+
+
+def test_evidence_id_without_revision():
+    assert evidence_id("ASYNCAPI", "order-service") == "evidence:asyncapi:order-service"
+
+
+def test_evidence_id_with_revision():
+    assert (
+        evidence_id("ASYNCAPI", "order-service", "abc123")
+        == "evidence:asyncapi:order-service:abc123"
+    )
+
+
+def test_evidence_id_lowercases_source_type():
+    assert evidence_id("MANIFEST", "order-service") == "evidence:manifest:order-service"
+
+
+def test_evidence_id_changes_when_revision_changes():
+    assert evidence_id("OPENAPI", "order-service", "abc123") != evidence_id(
+        "OPENAPI", "order-service", "def456"
+    )
 
 
 def test_ids_are_deterministic_across_calls():

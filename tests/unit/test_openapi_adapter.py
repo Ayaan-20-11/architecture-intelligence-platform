@@ -105,10 +105,13 @@ def test_provenance_recorded():
         source_revision="abc123",
     )
     [provenance] = model.provenance
+    assert provenance.id == ids.evidence_id("OPENAPI", "product-service", "abc123")
     assert provenance.source_type == "OPENAPI"
     assert provenance.source_file == "examples/product-service/openapi.yaml"
     assert provenance.source_revision == "abc123"
     assert provenance.evidence_type == "DECLARED"
+
+    assert all(r.evidence_ids == [provenance.id] for r in model.relations)
 
 
 def test_service_with_no_operations_still_produces_service_and_provenance():

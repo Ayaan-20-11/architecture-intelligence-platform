@@ -6,28 +6,28 @@
 <section>
   <h2>Provides REST</h2>
   {% if provides %}
-  <ul>{% for op in provides %}<li><code>{{ op.method }} {{ op.path }}</code></li>{% endfor %}</ul>
+  <ul>{% for op in provides %}<li><code>{{ op.method }} {{ op.path }}</code>{% if op.evidence %}<ul>{% for e in op.evidence %}<li class="evidence">Source: {{ e.source_file }}{% if e.source_revision %} / Revision: {{ e.source_revision }}{% endif %} / Evidence: {{ e.evidence_type }}</li>{% endfor %}</ul>{% endif %}</li>{% endfor %}</ul>
   {% else %}<p class="empty">none</p>{% endif %}
 </section>
 
 <section>
   <h2>Calls REST</h2>
   {% if calls %}
-  <ul>{% for c in calls %}<li>{{ c.service_name }} / {{ c.operation_id }}</li>{% endfor %}</ul>
+  <ul>{% for c in calls %}<li>{{ c.service_name }} / {{ c.operation_id }}{% if c.evidence %}<ul>{% for e in c.evidence %}<li class="evidence">Source: {{ e.source_file }}{% if e.source_revision %} / Revision: {{ e.source_revision }}{% endif %} / Evidence: {{ e.evidence_type }}</li>{% endfor %}</ul>{% endif %}</li>{% endfor %}</ul>
   {% else %}<p class="empty">none</p>{% endif %}
 </section>
 
 <section>
   <h2>Sends to queues</h2>
   {% if sends %}
-  <ul>{% for q in sends %}<li><a href="/queues/{{ q.id }}">{{ q.name }}</a></li>{% endfor %}</ul>
+  <ul>{% for q in sends %}<li><a href="/queues/{{ q.id }}">{{ q.name }}</a>{% if q.evidence %}<ul>{% for e in q.evidence %}<li class="evidence">Source: {{ e.source_file }}{% if e.source_revision %} / Revision: {{ e.source_revision }}{% endif %} / Evidence: {{ e.evidence_type }}</li>{% endfor %}</ul>{% endif %}</li>{% endfor %}</ul>
   {% else %}<p class="empty">none</p>{% endif %}
 </section>
 
 <section>
   <h2>Receives from queues</h2>
   {% if receives %}
-  <ul>{% for q in receives %}<li><a href="/queues/{{ q.id }}">{{ q.name }}</a></li>{% endfor %}</ul>
+  <ul>{% for q in receives %}<li><a href="/queues/{{ q.id }}">{{ q.name }}</a>{% if q.evidence %}<ul>{% for e in q.evidence %}<li class="evidence">Source: {{ e.source_file }}{% if e.source_revision %} / Revision: {{ e.source_revision }}{% endif %} / Evidence: {{ e.evidence_type }}</li>{% endfor %}</ul>{% endif %}</li>{% endfor %}</ul>
   {% else %}<p class="empty">none</p>{% endif %}
 </section>
 

@@ -16,6 +16,7 @@ NODE_LABELS = {
     "queues": "Queue",
     "messages": "Message",
     "schemas": "Schema",
+    "provenance": "Evidence",
 }
 
 _MERGE_NODE_TEMPLATE = (
@@ -30,7 +31,9 @@ _MERGE_RELATION_TEMPLATE = (
     "MERGE (a)-[r:{relation_type}]->(b) "
     "SET r.key = $key "
     "SET r.sources = CASE WHEN $service_id IN coalesce(r.sources, []) "
-    "THEN r.sources ELSE coalesce(r.sources, []) + $service_id END"
+    "THEN r.sources ELSE coalesce(r.sources, []) + $service_id END "
+    "SET r.evidence_ids = reduce(acc = coalesce(r.evidence_ids, []), eid IN $evidence_ids | "
+    "CASE WHEN eid IN acc THEN acc ELSE acc + eid END)"
 )
 
 _EXISTING_NODE_IDS_QUERY = (
@@ -40,6 +43,11 @@ _EXISTING_RELATION_KEYS_QUERY = (
     "MATCH ()-[r]->() WHERE $service_id IN coalesce(r.sources, []) RETURN r.key AS key"
 )
 
+_STRIP_STALE_EVIDENCE_QUERY = (
+    "UNWIND $ids AS eid "
+    "MATCH ()-[r]->() WHERE eid IN coalesce(r.evidence_ids, []) "
+    "SET r.evidence_ids = [x IN r.evidence_ids WHERE x <> eid]"
+)
 _EXPIRE_NODES_QUERY = (
     "UNWIND $ids AS nid "
     "MATCH (n {id: nid}) "
@@ -88,6 +96,7 @@ def _write_relations(
             target_id=relation.target_id,
             key=relation_key(relation),
             service_id=service_id,
+            evidence_ids=relation.evidence_ids,
         )
     return len(model.relations)
 
@@ -117,6 +126,7 @@ def _import_service_tx(
     if plan.stale_relation_keys:
         tx.run(_EXPIRE_RELATIONS_QUERY, keys=list(plan.stale_relation_keys), service_id=service_id)
     if plan.stale_node_ids:
+        tx.run(_STRIP_STALE_EVIDENCE_QUERY, ids=list(plan.stale_node_ids))
         tx.run(_EXPIRE_NODES_QUERY, ids=list(plan.stale_node_ids), service_id=service_id)
 
     return ImportStats(

@@ -21,12 +21,15 @@
 <section>
   <h2>Messages</h2>
   {% if messages %}
-  <ul>{% for m in messages %}<li>{{ m.name }}{% if m.version %}:{{ m.version }}{% endif %}</li>{% endfor %}</ul>
+  <ul>{% for m in messages %}<li>{{ m.name }}{% if m.version %}:{{ m.version }}{% endif %}{% if m.evidence %}<ul>{% for e in m.evidence %}<li class="evidence">Source: {{ e.source_file }}{% if e.source_revision %} / Revision: {{ e.source_revision }}{% endif %} / Evidence: {{ e.evidence_type }}</li>{% endfor %}</ul>{% endif %}</li>{% endfor %}</ul>
   {% else %}<p class="empty">none</p>{% endif %}
 </section>
 
 <section>
   <h2>DLQ</h2>
-  {% if dlq %}<p><a href="/queues/{{ dlq.id }}">{{ dlq.name }}</a></p>{% else %}<p class="empty">none</p>{% endif %}
+  {% if dlq %}
+  <p><a href="/queues/{{ dlq.id }}">{{ dlq.name }}</a></p>
+  {% if dlq.evidence %}<ul>{% for e in dlq.evidence %}<li class="evidence">Source: {{ e.source_file }}{% if e.source_revision %} / Revision: {{ e.source_revision }}{% endif %} / Evidence: {{ e.evidence_type }}</li>{% endfor %}</ul>{% endif %}
+  {% else %}<p class="empty">none</p>{% endif %}
 </section>
 {% endblock %}

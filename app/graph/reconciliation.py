@@ -26,6 +26,7 @@ def model_node_ids(model: ArchitectureModel) -> set[str]:
         *(q.id for q in model.queues),
         *(m.id for m in model.messages),
         *(sc.id for sc in model.schemas),
+        *(p.id for p in model.provenance),
     }
 
 

@@ -3,9 +3,18 @@ from pathlib import Path
 import pytest
 from testcontainers.community.neo4j import Neo4jContainer
 
-from app.canonical.model import ArchitectureModel, Operation, Queue, Relation, Schema, Service
+from app.canonical.model import (
+    ArchitectureModel,
+    Message,
+    Operation,
+    Queue,
+    Relation,
+    Schema,
+    Service,
+)
 from app.graph.importer import import_all_sources, import_service
 from app.graph.schema import ensure_schema
+from app.provenance.model import Provenance
 
 EXAMPLES_DIR = Path(__file__).resolve().parent.parent.parent / "examples"
 DATABASE = "neo4j"
@@ -94,6 +103,150 @@ def test_import_service_creates_nodes_and_relations(driver):
             "MATCH (n:Service {id: 'service:product-service'}) RETURN n.sources AS sources"
         ).single()
     assert record["sources"] == ["product-service"]
+
+
+def test_import_service_creates_evidence_node_and_tags_relation(driver):
+    evidence = Provenance(
+        id="evidence:openapi:product-service",
+        source_type="OPENAPI",
+        source_file="product-service/openapi.yaml",
+        source_revision="abc123",
+    )
+    model = ArchitectureModel(
+        services=[Service(id="service:product-service", name="ProductService")],
+        operations=[
+            Operation(
+                id="operation:product-service:GET:/products/{id}",
+                service_id="service:product-service",
+                operation_id="getProduct",
+                method="GET",
+                path="/products/{id}",
+            )
+        ],
+        relations=[
+            Relation(
+                type="PROVIDES",
+                source_id="service:product-service",
+                target_id="operation:product-service:GET:/products/{id}",
+                evidence_ids=[evidence.id],
+            )
+        ],
+        provenance=[evidence],
+    )
+    with driver.session(database=DATABASE) as session:
+        ensure_schema(session)
+        stats = import_service(session, "product-service", model)
+
+    assert stats.nodes_written == 3  # service + operation + evidence
+
+    with driver.session(database=DATABASE) as session:
+        evidence_record = session.run(
+            "MATCH (e:Evidence {id: $id}) RETURN e.source_type AS source_type, "
+            "e.source_file AS source_file, e.source_revision AS source_revision, "
+            "e.evidence_type AS evidence_type, e.sources AS sources",
+            id=evidence.id,
+        ).single()
+    assert evidence_record["source_type"] == "OPENAPI"
+    assert evidence_record["source_file"] == "product-service/openapi.yaml"
+    assert evidence_record["source_revision"] == "abc123"
+    assert evidence_record["evidence_type"] == "DECLARED"
+    assert evidence_record["sources"] == ["product-service"]
+
+    with driver.session(database=DATABASE) as session:
+        relation_record = session.run(
+            "MATCH ()-[r:PROVIDES]->() RETURN r.evidence_ids AS evidence_ids"
+        ).single()
+    assert relation_record["evidence_ids"] == [evidence.id]
+
+
+def test_shared_relation_accumulates_evidence_from_both_declaring_services(driver):
+    # Mirrors the real fixture landscape: order-service (sender) and payment-service
+    # (receiver) both independently declare CARRIES payment-q -> PaymentRequested in
+    # their own AsyncAPI docs - the same relation triple, two separate import
+    # transactions, two separate pieces of evidence that must both survive.
+    evidence_order = Provenance(
+        id="evidence:asyncapi:order-service",
+        source_type="ASYNCAPI",
+        source_file="order-service/asyncapi.yaml",
+    )
+    evidence_payment = Provenance(
+        id="evidence:asyncapi:payment-service",
+        source_type="ASYNCAPI",
+        source_file="payment-service/asyncapi.yaml",
+    )
+    order_model = ArchitectureModel(
+        services=[Service(id="service:order-service", name="OrderService")],
+        queues=[Queue(id="queue:payment-q", name="payment-q")],
+        messages=[Message(id="message:PaymentRequested:v2", name="PaymentRequested", version="v2")],
+        relations=[
+            Relation(
+                type="SENDS",
+                source_id="service:order-service",
+                target_id="queue:payment-q",
+                evidence_ids=[evidence_order.id],
+            ),
+            Relation(
+                type="CARRIES",
+                source_id="queue:payment-q",
+                target_id="message:PaymentRequested:v2",
+                evidence_ids=[evidence_order.id],
+            ),
+        ],
+        provenance=[evidence_order],
+    )
+    payment_model = ArchitectureModel(
+        services=[Service(id="service:payment-service", name="PaymentService")],
+        queues=[Queue(id="queue:payment-q", name="payment-q")],
+        messages=[Message(id="message:PaymentRequested:v2", name="PaymentRequested", version="v2")],
+        relations=[
+            Relation(
+                type="RECEIVES_FROM",
+                source_id="service:payment-service",
+                target_id="queue:payment-q",
+                evidence_ids=[evidence_payment.id],
+            ),
+            Relation(
+                type="CARRIES",
+                source_id="queue:payment-q",
+                target_id="message:PaymentRequested:v2",
+                evidence_ids=[evidence_payment.id],
+            ),
+        ],
+        provenance=[evidence_payment],
+    )
+
+    with driver.session(database=DATABASE) as session:
+        ensure_schema(session)
+        import_service(session, "order-service", order_model)
+        import_service(session, "payment-service", payment_model)
+
+    with driver.session(database=DATABASE) as session:
+        record = session.run(
+            "MATCH (:Queue {id:'queue:payment-q'})-[r:CARRIES]->(:Message) "
+            "RETURN r.evidence_ids AS evidence_ids"
+        ).single()
+    assert set(record["evidence_ids"]) == {evidence_order.id, evidence_payment.id}
+
+    # order-service stops declaring payment-q entirely (e.g. its asyncapi.yaml was removed)
+    order_model_without_payment_q = ArchitectureModel(
+        services=[Service(id="service:order-service", name="OrderService")]
+    )
+    with driver.session(database=DATABASE) as session:
+        import_service(session, "order-service", order_model_without_payment_q)
+
+    # order-service's evidence is gone entirely (no longer referenced by anyone)
+    assert (
+        _count(driver, "MATCH (e:Evidence {id: $id}) RETURN count(e) AS c", id=evidence_order.id)
+        == 0
+    )
+    # the CARRIES relation survives (payment-service still declares it) with only
+    # payment-service's evidence remaining
+    with driver.session(database=DATABASE) as session:
+        record = session.run(
+            "MATCH (:Queue {id:'queue:payment-q'})-[r:CARRIES]->(:Message) "
+            "RETURN r.evidence_ids AS evidence_ids"
+        ).single()
+    assert record["evidence_ids"] == [evidence_payment.id]
 
 
 def test_import_service_is_idempotent(driver):
@@ -209,6 +362,30 @@ def test_import_all_sources_real_examples_end_to_end(driver):
 
     assert _count(driver, "MATCH ()-[r:DEAD_LETTERS_TO]->() RETURN count(r) AS c") == 1
     assert _count(driver, "MATCH (q:Queue) RETURN count(q) AS c") == 5
+
+    # Evidence: one per scanned source file - order-service has 3 (openapi/asyncapi/manifest),
+    # product-service/payment-service/invoice-service have 1 each (AC13).
+    assert _count(driver, "MATCH (e:Evidence) RETURN count(e) AS c") == 6
+
+    # the manifest-derived CALLS relation is backed by exactly the manifest's evidence
+    with driver.session(database=DATABASE) as session:
+        record = session.run(
+            "MATCH (s:Service {id: 'service:order-service'})-[r:CALLS]->(:Operation) "
+            "RETURN r.evidence_ids AS evidence_ids"
+        ).single()
+    assert record["evidence_ids"] == ["evidence:manifest:order-service"]
+
+    # payment-q CARRIES PaymentRequested is independently declared by order-service
+    # (sender) and payment-service (receiver) - both pieces of evidence must be present
+    with driver.session(database=DATABASE) as session:
+        record = session.run(
+            "MATCH (:Queue {id: 'queue:payment-q'})-[r:CARRIES]->(:Message) "
+            "RETURN r.evidence_ids AS evidence_ids"
+        ).single()
+    assert set(record["evidence_ids"]) == {
+        "evidence:asyncapi:order-service",
+        "evidence:asyncapi:payment-service",
+    }
 
 
 def test_import_all_sources_is_idempotent(driver):

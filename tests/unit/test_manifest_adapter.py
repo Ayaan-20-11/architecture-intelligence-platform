@@ -21,9 +21,11 @@ def test_resolves_calls_relation_via_operation_index():
     }
     model = parse_manifest(document, source_file="architecture.yaml", operation_index=index)
     [relation] = model.relations
+    [provenance] = model.provenance
     assert relation.type == "CALLS"
     assert relation.source_id == ids.service_id("order-service")
     assert relation.target_id == "operation:product-service:GET:/products/{id}"
+    assert relation.evidence_ids == [provenance.id]
 
 
 def test_raises_on_unknown_operation_id():
@@ -50,6 +52,7 @@ def test_provenance_recorded():
         source_revision="rev1",
     )
     [provenance] = model.provenance
+    assert provenance.id == ids.evidence_id("MANIFEST", "order-service", "rev1")
     assert provenance.source_type == "MANIFEST"
     assert provenance.source_file == "architecture.yaml"
     assert provenance.source_revision == "rev1"

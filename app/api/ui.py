@@ -13,6 +13,31 @@ from app.deps import build_question_service, get_read_session
 router = APIRouter(tags=["ui"])
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
 
+_EVIDENCE_BY_IDS_QUERY = (
+    "UNWIND $ids AS eid "
+    "MATCH (e:Evidence {id: eid}) "
+    "RETURN e.id AS id, e.source_type AS source_type, e.source_file AS source_file, "
+    "e.source_revision AS source_revision, e.evidence_type AS evidence_type"
+)
+
+
+def _attach_evidence(session: neo4j.Session, rows: list[dict]) -> list[dict]:
+    """Resolves each row's evidence_ids into full Evidence records in one batch query (spec §4.11)."""
+    all_ids = {eid for row in rows for eid in row.get("evidence_ids") or []}
+    evidence_by_id = (
+        {
+            record["id"]: record.data()
+            for record in session.run(_EVIDENCE_BY_IDS_QUERY, ids=list(all_ids))
+        }
+        if all_ids
+        else {}
+    )
+    for row in rows:
+        row["evidence"] = [
+            evidence_by_id[eid] for eid in row.get("evidence_ids") or [] if eid in evidence_by_id
+        ]
+    return rows
+
 
 @router.get("/", response_class=HTMLResponse)
 def index(request: Request, session: neo4j.Session = Depends(get_read_session)):
@@ -35,25 +60,40 @@ def service_explorer(
     if service is None:
         raise HTTPException(status_code=404, detail=f"service not found: {service_id}")
 
-    provides = session.run(
-        "MATCH (:Service {id: $id})-[:PROVIDES]->(o:Operation) "
-        "RETURN o.method AS method, o.path AS path ORDER BY o.path",
-        id=service_id,
-    ).data()
-    calls = session.run(
-        "MATCH (:Service {id: $id})-[:CALLS]->(o:Operation)<-[:PROVIDES]-(target:Service) "
-        "RETURN target.name AS service_name, o.operation_id AS operation_id ORDER BY target.name",
-        id=service_id,
-    ).data()
-    sends = session.run(
-        "MATCH (:Service {id: $id})-[:SENDS]->(q:Queue) RETURN q.id AS id, q.name AS name ORDER BY q.name",
-        id=service_id,
-    ).data()
-    receives = session.run(
-        "MATCH (:Service {id: $id})-[:RECEIVES_FROM]->(q:Queue) "
-        "RETURN q.id AS id, q.name AS name ORDER BY q.name",
-        id=service_id,
-    ).data()
+    provides = _attach_evidence(
+        session,
+        session.run(
+            "MATCH (:Service {id: $id})-[r:PROVIDES]->(o:Operation) "
+            "RETURN o.method AS method, o.path AS path, r.evidence_ids AS evidence_ids "
+            "ORDER BY o.path",
+            id=service_id,
+        ).data(),
+    )
+    calls = _attach_evidence(
+        session,
+        session.run(
+            "MATCH (:Service {id: $id})-[r:CALLS]->(o:Operation)<-[:PROVIDES]-(target:Service) "
+            "RETURN target.name AS service_name, o.operation_id AS operation_id, "
+            "r.evidence_ids AS evidence_ids ORDER BY target.name",
+            id=service_id,
+        ).data(),
+    )
+    sends = _attach_evidence(
+        session,
+        session.run(
+            "MATCH (:Service {id: $id})-[r:SENDS]->(q:Queue) "
+            "RETURN q.id AS id, q.name AS name, r.evidence_ids AS evidence_ids ORDER BY q.name",
+            id=service_id,
+        ).data(),
+    )
+    receives = _attach_evidence(
+        session,
+        session.run(
+            "MATCH (:Service {id: $id})-[r:RECEIVES_FROM]->(q:Queue) "
+            "RETURN q.id AS id, q.name AS name, r.evidence_ids AS evidence_ids ORDER BY q.name",
+            id=service_id,
+        ).data(),
+    )
     downstream = blast_radius(session, service_id, max_depth=1)
 
     return templates.TemplateResponse(
@@ -81,13 +121,18 @@ def queue_explorer(
     if queue is None:
         raise HTTPException(status_code=404, detail=f"queue not found: {queue_id}")
 
-    messages = session.run(
-        "MATCH (:Queue {id: $id})-[:CARRIES]->(m:Message) "
-        "RETURN m.name AS name, m.version AS version ORDER BY m.name",
-        id=queue_id,
-    ).data()
+    messages = _attach_evidence(
+        session,
+        session.run(
+            "MATCH (:Queue {id: $id})-[r:CARRIES]->(m:Message) "
+            "RETURN m.name AS name, m.version AS version, r.evidence_ids AS evidence_ids "
+            "ORDER BY m.name",
+            id=queue_id,
+        ).data(),
+    )
     dlq = session.run(
-        "MATCH (:Queue {id: $id})-[:DEAD_LETTERS_TO]->(d:Queue) RETURN d.id AS id, d.name AS name",
+        "MATCH (:Queue {id: $id})-[r:DEAD_LETTERS_TO]->(d:Queue) "
+        "RETURN d.id AS id, d.name AS name, r.evidence_ids AS evidence_ids",
         id=queue_id,
     ).single()
 
@@ -99,7 +144,7 @@ def queue_explorer(
             "senders": senders_of_queue(session, queue_id),
             "consumers": consumers_of_queue(session, queue_id),
             "messages": messages,
-            "dlq": dlq.data() if dlq else None,
+            "dlq": _attach_evidence(session, [dlq.data()])[0] if dlq else None,
         },
     )
 

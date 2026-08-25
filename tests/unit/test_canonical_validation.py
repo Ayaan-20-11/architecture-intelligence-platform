@@ -11,6 +11,7 @@ from app.canonical.model import (
     Relation,
     Service,
 )
+from app.provenance.model import Provenance
 from app.validation.canonical_validation import CanonicalValidationError, validate_canonical_model
 
 FIXTURE_PATH = Path(__file__).resolve().parent.parent / "fixtures" / "example_architecture.yaml"
@@ -153,6 +154,45 @@ def test_v8_relation_unknown_source_and_target():
         validate_canonical_model(model)
     assert "unknown source" in str(exc.value)
     assert "unknown target" in str(exc.value)
+
+
+def test_relation_with_known_evidence_id_passes():
+    model = ArchitectureModel(
+        queues=[Queue(id="queue:a", name="a")],
+        services=[Service(id="service:a", name="A")],
+        relations=[
+            Relation(
+                type="SENDS",
+                source_id="service:a",
+                target_id="queue:a",
+                evidence_ids=["evidence:asyncapi:a"],
+            )
+        ],
+        provenance=[
+            Provenance(
+                id="evidence:asyncapi:a", source_type="ASYNCAPI", source_file="a/asyncapi.yaml"
+            )
+        ],
+    )
+    validate_canonical_model(model)  # must not raise
+
+
+def test_relation_with_unknown_evidence_id_rejected():
+    model = ArchitectureModel(
+        queues=[Queue(id="queue:a", name="a")],
+        services=[Service(id="service:a", name="A")],
+        relations=[
+            Relation(
+                type="SENDS",
+                source_id="service:a",
+                target_id="queue:a",
+                evidence_ids=["evidence:asyncapi:missing"],
+            )
+        ],
+    )
+    with pytest.raises(CanonicalValidationError) as exc:
+        validate_canonical_model(model)
+    assert "unknown evidence" in str(exc.value)
 
 
 def test_multiple_errors_are_all_reported():

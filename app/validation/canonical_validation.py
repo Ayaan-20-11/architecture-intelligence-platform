@@ -85,5 +85,15 @@ def validate_canonical_model(model: ArchitectureModel) -> None:
         if relation.target_id not in known_ids:
             errors.append(f"Relation {relation.type} has unknown target {relation.target_id}")
 
+    # Evidence: every relation's evidence_ids must reference a Provenance record in this model
+    evidence_ids = {p.id for p in model.provenance}
+    for relation in model.relations:
+        for evidence_id in relation.evidence_ids:
+            if evidence_id not in evidence_ids:
+                errors.append(
+                    f"Relation {relation.type} {relation.source_id} -> {relation.target_id} "
+                    f"references unknown evidence {evidence_id}"
+                )
+
     if errors:
         raise CanonicalValidationError(errors)

@@ -109,14 +109,18 @@ def parse_openapi(
                 for schema_id_value in response_schema_ids
             )
 
+    evidence = Provenance(
+        id=ids.evidence_id("OPENAPI", service_id, source_revision),
+        source_type="OPENAPI",
+        source_file=source_file,
+        source_revision=source_revision,
+    )
+    relations = [r.model_copy(update={"evidence_ids": [evidence.id]}) for r in relations]
+
     return ArchitectureModel(
         services=[service],
         operations=operations,
         schemas=list(schemas_by_name.values()),
         relations=relations,
-        provenance=[
-            Provenance(
-                source_type="OPENAPI", source_file=source_file, source_revision=source_revision
-            )
-        ],
+        provenance=[evidence],
     )

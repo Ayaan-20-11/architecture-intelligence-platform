@@ -117,18 +117,23 @@ relations:
     target_id: queue:unknown-producer-q
 
 provenance:
-  - source_type: OPENAPI
+  - id: evidence:openapi:product-service
+    source_type: OPENAPI
     source_file: examples/product-service/openapi.yaml
     evidence_type: DECLARED
-  - source_type: OPENAPI
+  - id: evidence:openapi:order-service
+    source_type: OPENAPI
     source_file: examples/order-service/openapi.yaml
     evidence_type: DECLARED
-  - source_type: ASYNCAPI
+  - id: evidence:asyncapi:order-service
+    source_type: ASYNCAPI
     source_file: examples/order-service/asyncapi.yaml
     evidence_type: DECLARED
-  - source_type: ASYNCAPI
+  - id: evidence:asyncapi:payment-service
+    source_type: ASYNCAPI
     source_file: examples/payment-service/asyncapi.yaml
     evidence_type: DECLARED
-  - source_type: MANIFEST
+  - id: evidence:manifest:order-service
+    source_type: MANIFEST
     source_file: examples/order-service/architecture.yaml
     evidence_type: DECLARED

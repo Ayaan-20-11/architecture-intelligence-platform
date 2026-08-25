@@ -94,7 +94,15 @@ schema:PaymentRequested:v2
 
 ### Neo4j graph model
 
-Node labels: `Service`, `Operation`, `Queue`, `Message`, `Schema`.
+Node labels: `Service`, `Operation`, `Queue`, `Message`, `Schema`, `Evidence`.
+
+`Evidence` (added post-PoC, Iteration 10A / hardening spec §4) persists what was previously only an
+in-memory `Provenance` record: `id`, `source_type`, `source_file`, `source_revision`, `evidence_type`.
+Every relationship below also carries an `evidence_ids: list[str]` property naming the `Evidence.id`(s)
+that declared it — there is no direct graph edge from a relationship to `Evidence`; look up the IDs and
+`MATCH (e:Evidence) WHERE e.id IN r.evidence_ids`. Queryable via `GET /api/evidence`,
+`GET /api/evidence/{id}`, `GET /api/services/{id}/evidence`, `GET /api/queues/{id}/evidence` — this is
+what makes AC13 (traceable provenance) fully met rather than only produced-but-unpersisted.
 
 | Relation | From -> To | Meaning |
 |---|---|---|
@@ -113,8 +121,10 @@ Dependency semantics (Appendix A of the spec):
 
 Import strategy: MERGE-based, idempotent, per-service full reimport. All `DECLARED` facts whose
 provenance belongs to a given service are replaced in one transaction; globally shared entities
-(Queues, Messages, Schemas) are merged via stable IDs and only removed once no provenance references
-them anymore.
+(Queues, Messages, Schemas, Evidence) are merged via stable IDs and only removed once no provenance
+references them anymore. A relation declared by multiple services (e.g. a shared `CARRIES` edge) keeps
+accumulating each contributor's evidence independently, and only loses one contributor's evidence when
+that specific service stops declaring the relation.
 
 Derived relations like `SYNC_DEPENDS_ON`/`ASYNC_FLOW_TO` are intentionally treated as **computed views**,
 not materialized/stored facts, to keep the graph free of redundant truths.
@@ -166,7 +176,7 @@ app/
   graph/             repository.py, importer.py, reconciliation.py, schema.py
   analysis/          queues.py, dependencies.py, blast_radius.py
   ai/                question_service.py, provider.py, cypher_generator.py, cypher_validator.py, answer_composer.py
-  api/               services.py, queues.py, messages.py, analysis.py, import_api.py, query.py
+  api/               services.py, queues.py, messages.py, analysis.py, import_api.py, query.py, evidence.py
 tests/
   unit/, integration/, fixtures/
 examples/

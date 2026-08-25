@@ -143,6 +143,57 @@ def test_get_message_not_found(client):
     assert response.status_code == 404
 
 
+def test_list_evidence(client):
+    response = client.get("/api/evidence")
+    assert response.status_code == 200
+    # one per scanned source file: order-service has 3 (openapi/asyncapi/manifest),
+    # product-service/payment-service/invoice-service have 1 each
+    assert len(response.json()) == 6
+    source_types = {e["source_type"] for e in response.json()}
+    assert source_types == {"OPENAPI", "ASYNCAPI", "MANIFEST"}
+
+
+def test_get_evidence(client):
+    response = client.get("/api/evidence/evidence:manifest:order-service")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source_type"] == "MANIFEST"
+    assert body["source_file"].endswith("examples/order-service/architecture.yaml")
+    assert body["evidence_type"] == "DECLARED"
+
+
+def test_get_evidence_not_found(client):
+    response = client.get("/api/evidence/evidence:openapi:does-not-exist")
+    assert response.status_code == 404
+
+
+def test_get_service_evidence(client):
+    response = client.get(f"/api/services/{ids.service_id('order-service')}/evidence")
+    assert response.status_code == 200
+    source_types = {e["source_type"] for e in response.json()}
+    # order-service PROVIDES (openapi), SENDS (asyncapi), and CALLS (manifest)
+    assert source_types == {"OPENAPI", "ASYNCAPI", "MANIFEST"}
+
+
+def test_get_service_evidence_not_found(client):
+    response = client.get("/api/services/service:does-not-exist/evidence")
+    assert response.status_code == 404
+
+
+def test_get_queue_evidence(client):
+    response = client.get(f"/api/queues/{ids.queue_id('payment-q')}/evidence")
+    assert response.status_code == 200
+    ids_found = {e["id"] for e in response.json()}
+    # payment-q's SENDS/CARRIES/RECEIVES_FROM/DEAD_LETTERS_TO relations are declared by
+    # both order-service (sender) and payment-service (consumer + DLQ)
+    assert ids_found == {"evidence:asyncapi:order-service", "evidence:asyncapi:payment-service"}
+
+
+def test_get_queue_evidence_not_found(client):
+    response = client.get("/api/queues/queue:does-not-exist/evidence")
+    assert response.status_code == 404
+
+
 def test_a1_senders_endpoint(client):
     response = client.get(f"/api/analysis/queues/{ids.queue_id('payment-q')}/senders")
     assert response.status_code == 200
@@ -244,6 +295,11 @@ def test_ui_service_explorer(client):
     assert "OrderService" in response.text
     assert "ProductService / getProduct" in response.text
     assert "payment-q" in response.text
+    # evidence rendered per relation (spec §4.11)
+    assert "examples/order-service/openapi.yaml" in response.text
+    assert "examples/order-service/asyncapi.yaml" in response.text
+    assert "examples/order-service/architecture.yaml" in response.text
+    assert "Evidence: DECLARED" in response.text
 
 
 def test_ui_service_explorer_not_found(client):
@@ -258,6 +314,9 @@ def test_ui_queue_explorer(client):
     assert "PaymentService" in response.text  # consumer
     assert "PaymentRequested" in response.text
     assert "payment-dlq" in response.text  # DLQ
+    # evidence rendered on the CARRIES relation (spec §4.11)
+    assert "examples/order-service/asyncapi.yaml" in response.text
+    assert "examples/payment-service/asyncapi.yaml" in response.text
 
 
 def test_ui_queue_explorer_not_found(client):

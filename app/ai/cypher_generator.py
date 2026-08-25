@@ -7,6 +7,7 @@ Node labels and their key properties:
   Queue(id, name, protocol, namespace, queue_type)
   Message(id, name, version, schema_id)
   Schema(id, name, version, format)
+  Evidence(id, source_type, source_file, source_revision, evidence_type)
 
 Relationship types (always Service/Operation/Queue/Message/Schema as documented):
   (Service)-[:PROVIDES]->(Operation)          REST provider
@@ -18,6 +19,11 @@ Relationship types (always Service/Operation/Queue/Message/Schema as documented)
   (Queue)-[:CARRIES]->(Message)                message type on queue
   (Message)-[:CONFORMS_TO]->(Schema)           message payload schema
   (Queue)-[:DEAD_LETTERS_TO]->(Queue)          DLQ relationship
+
+Every relationship above also carries an evidence_ids property: an array of Evidence.id \
+values naming which imported spec file(s) declared that fact. There is no direct graph edge \
+from a relationship to Evidence - look up r.evidence_ids on the relationship, then \
+MATCH (e:Evidence) WHERE e.id IN r.evidence_ids to find the source file(s)/revision(s).
 
 Only MATCH, OPTIONAL MATCH, WHERE, WITH, RETURN, ORDER BY, and LIMIT are permitted - the \
 query must be read-only.\

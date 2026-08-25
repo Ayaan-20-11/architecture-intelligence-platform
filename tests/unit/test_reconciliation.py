@@ -5,6 +5,7 @@ from app.graph.reconciliation import (
     plan_reconciliation,
     relation_key,
 )
+from app.provenance.model import Provenance
 
 
 def test_relation_key_format():
@@ -18,6 +19,16 @@ def test_model_node_ids_collects_all_entity_types():
         queues=[Queue(id="queue:b", name="b")],
     )
     assert model_node_ids(model) == {"service:a", "queue:b"}
+
+
+def test_model_node_ids_includes_evidence():
+    model = ArchitectureModel(
+        services=[Service(id="service:a", name="A")],
+        provenance=[
+            Provenance(id="evidence:asyncapi:a", source_type="ASYNCAPI", source_file="a.yaml")
+        ],
+    )
+    assert model_node_ids(model) == {"service:a", "evidence:asyncapi:a"}
 
 
 def test_model_relation_keys():
