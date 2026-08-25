@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Natural Language Query{% endblock %}
+{% block content %}
+<h1>Natural Language Query</h1>
+<form method="get" action="/query">
+  <input type="text" name="question" placeholder="Ask a question about the architecture..." value="{{ question or '' }}">
+  <button type="submit">Ask</button>
+</form>
+
+{% if result %}
+<section>
+  <h2>Question</h2>
+  <p>{{ result.question }}</p>
+</section>
+<section>
+  <h2>Generated Cypher</h2>
+  {% if result.cypher %}<pre>{{ result.cypher }}</pre>{% else %}<p class="empty">not available</p>{% endif %}
+</section>
+<section>
+  <h2>Result rows</h2>
+  {% if result.rows %}
+  <table>
+    <tr>{% for key in result.rows[0].keys() %}<th>{{ key }}</th>{% endfor %}</tr>
+    {% for row in result.rows %}<tr>{% for value in row.values() %}<td>{{ value }}</td>{% endfor %}</tr>{% endfor %}
+  </table>
+  {% else %}<p class="empty">no rows</p>{% endif %}
+</section>
+<section>
+  <h2>Answer</h2>
+  <p>{{ result.answer }}</p>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,18 @@
+# Default PoC configuration (spec §17.1). NEO4J_URI overrides graph.uri (see
+# docker-compose.yml); NEO4J_USER, NEO4J_PASSWORD, ANTHROPIC_API_KEY are read
+# from the environment only (spec §17.2), never from this file.
+architecture_intelligence:
+  sources:
+    directories:
+      - examples
+  graph:
+    uri: bolt://localhost:7687
+    database: neo4j
+    max_traversal_depth: 5
+  import:
+    openapi: true
+    asyncapi: true
+    architecture_manifest: true
+  llm:
+    enabled: true
+    max_result_rows: 100

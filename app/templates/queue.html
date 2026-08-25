@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}{{ queue.name }}{% endblock %}
+{% block content %}
+<h1>{{ queue.name }}</h1>
+<p>Protocol: {{ queue.protocol or "unknown" }}</p>
+
+<section>
+  <h2>Senders</h2>
+  {% if senders %}
+  <ul>{% for s in senders %}<li><a href="/services/{{ s.id }}">{{ s.name }}</a></li>{% endfor %}</ul>
+  {% else %}<p class="empty">none</p>{% endif %}
+</section>
+
+<section>
+  <h2>Consumers</h2>
+  {% if consumers %}
+  <ul>{% for c in consumers %}<li><a href="/services/{{ c.id }}">{{ c.name }}</a></li>{% endfor %}</ul>
+  {% else %}<p class="empty">none</p>{% endif %}
+</section>
+
+<section>
+  <h2>Messages</h2>
+  {% if messages %}
+  <ul>{% for m in messages %}<li>{{ m.name }}{% if m.version %}:{{ m.version }}{% endif %}</li>{% endfor %}</ul>
+  {% else %}<p class="empty">none</p>{% endif %}
+</section>
+
+<section>
+  <h2>DLQ</h2>
+  {% if dlq %}<p><a href="/queues/{{ dlq.id }}">{{ dlq.name }}</a></p>{% else %}<p class="empty">none</p>{% endif %}
+</section>
+{% endblock %}

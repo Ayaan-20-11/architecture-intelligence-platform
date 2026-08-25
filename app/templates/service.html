@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}{{ service.name }}{% endblock %}
+{% block content %}
+<h1>{{ service.name }}</h1>
+
+<section>
+  <h2>Provides REST</h2>
+  {% if provides %}
+  <ul>{% for op in provides %}<li><code>{{ op.method }} {{ op.path }}</code></li>{% endfor %}</ul>
+  {% else %}<p class="empty">none</p>{% endif %}
+</section>
+
+<section>
+  <h2>Calls REST</h2>
+  {% if calls %}
+  <ul>{% for c in calls %}<li>{{ c.service_name }} / {{ c.operation_id }}</li>{% endfor %}</ul>
+  {% else %}<p class="empty">none</p>{% endif %}
+</section>
+
+<section>
+  <h2>Sends to queues</h2>
+  {% if sends %}
+  <ul>{% for q in sends %}<li><a href="/queues/{{ q.id }}">{{ q.name }}</a></li>{% endfor %}</ul>
+  {% else %}<p class="empty">none</p>{% endif %}
+</section>
+
+<section>
+  <h2>Receives from queues</h2>
+  {% if receives %}
+  <ul>{% for q in receives %}<li><a href="/queues/{{ q.id }}">{{ q.name }}</a></li>{% endfor %}</ul>
+  {% else %}<p class="empty">none</p>{% endif %}
+</section>
+
+<section>
+  <h2>Downstream</h2>
+  {% if downstream %}
+  <ul>{% for d in downstream %}<li>{{ d.service_name }} ({{ "sync" if d.via == "SYNC" else "async" }})</li>{% endfor %}</ul>
+  {% else %}<p class="empty">none</p>{% endif %}
+</section>
+{% endblock %}

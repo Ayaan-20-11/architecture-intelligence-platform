@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Architecture Intelligence{% endblock %}
+{% block content %}
+<h1>Architecture Intelligence Platform</h1>
+
+<section>
+  <h2>Services</h2>
+  {% if services %}
+  <ul>
+    {% for s in services %}
+    <li><a href="/services/{{ s.id }}">{{ s.name }}</a></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">No services imported yet. POST /api/import to load the configured sources.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Queues</h2>
+  {% if queues %}
+  <ul>
+    {% for q in queues %}
+    <li><a href="/queues/{{ q.id }}">{{ q.name }}</a></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">No queues imported yet.</p>
+  {% endif %}
+</section>
+{% endblock %}
