@@ -1,0 +1,54 @@
+asyncapi: '2.6.0'
+info:
+  title: PaymentService
+  version: "1.0.0"
+channels:
+  payment-q:
+    x-dead-letter-queue: payment-dlq
+    subscribe:
+      operationId: receivePaymentRequested
+      message:
+        $ref: '#/components/messages/PaymentRequested'
+  invoice-q:
+    publish:
+      operationId: sendInvoiceCreated
+      message:
+        $ref: '#/components/messages/InvoiceCreated'
+  unknown-producer-q:
+    subscribe:
+      operationId: receiveUnknownProducerMessage
+      message:
+        $ref: '#/components/messages/UnknownProducerMessage'
+components:
+  messages:
+    PaymentRequested:
+      name: PaymentRequested
+      x-version: v2
+      payload:
+        $ref: '#/components/schemas/PaymentRequestedPayload'
+    InvoiceCreated:
+      name: InvoiceCreated
+      x-version: v1
+      payload:
+        $ref: '#/components/schemas/InvoiceCreatedPayload'
+    UnknownProducerMessage:
+      name: UnknownProducerMessage
+      payload:
+        type: object
+  schemas:
+    PaymentRequestedPayload:
+      type: object
+      properties:
+        orderId:
+          type: string
+        amount:
+          type: number
+      required: [orderId, amount]
+    InvoiceCreatedPayload:
+      type: object
+      properties:
+        invoiceId:
+          type: string
+        amount:
+          type: number
+      required: [invoiceId, amount]

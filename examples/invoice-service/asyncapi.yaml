@@ -1,0 +1,26 @@
+asyncapi: '2.6.0'
+info:
+  title: InvoiceService
+  version: "1.0.0"
+channels:
+  invoice-q:
+    subscribe:
+      operationId: receiveInvoiceCreated
+      message:
+        $ref: '#/components/messages/InvoiceCreated'
+components:
+  messages:
+    InvoiceCreated:
+      name: InvoiceCreated
+      x-version: v1
+      payload:
+        $ref: '#/components/schemas/InvoiceCreatedPayload'
+  schemas:
+    InvoiceCreatedPayload:
+      type: object
+      properties:
+        invoiceId:
+          type: string
+        amount:
+          type: number
+      required: [invoiceId, amount]

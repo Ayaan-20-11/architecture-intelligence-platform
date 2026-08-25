@@ -1,0 +1,35 @@
+asyncapi: '2.6.0'
+info:
+  title: OrderService
+  version: "1.0.0"
+channels:
+  payment-q:
+    publish:
+      operationId: sendPaymentRequested
+      message:
+        $ref: '#/components/messages/PaymentRequested'
+  unused-q:
+    publish:
+      operationId: sendUnusedMessage
+      message:
+        $ref: '#/components/messages/UnusedMessage'
+components:
+  messages:
+    PaymentRequested:
+      name: PaymentRequested
+      x-version: v2
+      payload:
+        $ref: '#/components/schemas/PaymentRequestedPayload'
+    UnusedMessage:
+      name: UnusedMessage
+      payload:
+        type: object
+  schemas:
+    PaymentRequestedPayload:
+      type: object
+      properties:
+        orderId:
+          type: string
+        amount:
+          type: number
+      required: [orderId, amount]
