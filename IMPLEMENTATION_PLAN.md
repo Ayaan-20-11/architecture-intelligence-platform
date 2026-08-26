@@ -609,6 +609,68 @@ iteration that writes to Neo4j** — 11A-11D built a fully read-only pipeline.
   valid payload now requires real Neo4j) proving the full spec §62 path end-to-end — a real OTLP payload
   results in a queryable `CALLS` relation with an `OPENTELEMETRY`/`OBSERVED` Evidence node attached.
 
+## Iteration 11F — Architecture Comparison (H4)
+`Architecture_Intelligence_Platform_H4_OpenTelemetry_Specification.md` §38-48, §54, §67.
+**Exit criterion:** five deterministic, no-LLM Cypher analyses (O1-O5) deriving each relation's status
+from its `Evidence`, per spec §38's formula: `D ∧ O ⇒ CONFIRMED`, `D ∧ ¬O ⇒ DECLARED_ONLY`,
+`¬D ∧ O ⇒ OBSERVED_ONLY`, where `D` (declared) has no window/environment and `O` (observed) is scoped to
+a specific window+environment. Pure analysis functions only — no REST/UI/intent-router wiring (spec §67
+assigns that to 11G, mirroring how the base PoC's A1-A5 were built before their Iteration 7 API exposure).
+
+- `app/settings.py` — new `RuntimeAnalysisConfig(default_window_hours: int = 24)`, its own
+  `AppConfig.runtime_analysis` section (mirrors `IntentRouterConfig`'s precedent, not folded into the
+  ingestion-scoped `TelemetryConfig`); `config.yaml` gained the matching `runtime_analysis:` block.
+- `app/analysis/runtime.py` (new) — `observed_relations` (O1, all filters optional: `environment`,
+  `from_id`, `to_id`, `relation_type`), `confirmed_relations` (O2), `observed_only_relations` (O3),
+  `declared_only_relations` (O4, `status` always the literal `NOT_OBSERVED_IN_WINDOW`, per spec §40/H4.16
+  — never "obsolete"/"unused"/"dead"), `telemetry_coverage` (O5, `http_observed`/`messaging_observed`/
+  `spans_observed`). None read wall-clock time internally — all take an explicit `since`/optional `until`;
+  a separate `default_since()` helper does, kept apart for deterministic testing. Mirrors `queues.py`'s
+  "multiple analyses, one file" precedent rather than spec §54's suggested new `app/runtime_analysis/`
+  package (confirmed the repo has never adopted any of the spec's originally-suggested package splits).
+  A real correctness bug was caught and fixed at design-review time, before any code was written: `CALLS`
+  always goes `Service -> Operation`, never `Service -> Service`; `Operation` has no reliable `.name`; and
+  `PROVIDES` (the only edge resolving an Operation back to its provider Service) is written only by the
+  declared OpenAPI import path — never by 11C's aggregator for an undeclared/Fall-B operation. Resolving
+  the provider via an inner join through `PROVIDES` would have silently dropped exactly the rows O3
+  ("probably the most important H4 analysis", spec §44) exists to surface. Every relation-listing query
+  uses `OPTIONAL MATCH (o)<-[:PROVIDES]-(provider)` plus a `coalesce(provider.id, o.id)`/
+  `coalesce(provider.name, o.name, o.method + ' ' + o.path, o.id)` fallback chain instead — meaning a
+  `CALLS` row's `target_id`/`target_name` is the *provider service's* identity when one is declared, and
+  the bare operation's identity otherwise, never a dropped row.
+- O1-O3 each `UNION` a CALLS branch with a SENDS/RECEIVES_FROM branch (mirrors
+  `blast_radius.py::_NEIGHBORS_QUERY`'s existing SYNC/ASYNC UNION precedent); multiple matching daily
+  Evidence buckets within the window collapse into one summary row per relation via Cypher's standard
+  implicit-GROUP-BY-on-mixed-aggregates behavior (`min(first_seen)`/`max(last_seen)`/
+  `sum(observation_count)` alongside the non-aggregate columns). O2/O3/O4 require `environment` (not
+  optional, unlike O1's filters) — spec §38's `O(F,W,E)` bakes in one specific environment; the same fact
+  can be `CONFIRMED` in production and `DECLARED_ONLY` in staging simultaneously.
+- O4's `telemetry_coverage_available` is composed from O5 in Python (not duplicated Cypher): each row's
+  *subject* (always a real, directly-identified Service — O4 never needs `PROVIDES` resolution on that
+  side) is checked against `telemetry_coverage()`'s `http_observed` (for a `CALLS` row) or
+  `messaging_observed` (for `SENDS`/`RECEIVES_FROM`).
+- O5's "HTTP as provider" check has a documented, inherited PoC-scope limitation (from 11C, not fixed
+  here): it can only see `PROVIDES` edges, which the H4 pipeline never writes for an undeclared/Fall-B
+  operation — a service that is only ever an undeclared provider shows `http_observed: false` even with
+  real observed traffic reaching it. Documented in the `ServiceTelemetryCoverage` docstring and pinned by
+  a dedicated integration test (`test_o5_provider_side_gap_is_pinned`), not just a comment, so a future
+  fix to the underlying gap is forced to update a real assertion.
+- Explicitly deferred: any REST endpoint, UI, or intent-router wiring for O1-O5 (11G); an explicit "now"
+  upper bound beyond O1-O4's optional `until` param (spec §48's `window: {from, to}` response envelope
+  belongs to 11G); fixing the inherited `PROVIDES`-for-undeclared-operations gap (11C-era, documented not
+  changed, matching 11E's own precedent for an adjacent, higher-risk pre-existing gap).
+- 14 new tests (305 unit / 105 integration, up from 303/93): `default_since()`'s window arithmetic as
+  pure unit tests; Testcontainers tests combining `import_all_sources` (declared baseline) with
+  `persist_observation_batch` (observed facts on top, mirroring `test_aggregator.py`'s own pattern) —
+  O1's aggregation and independent per-filter behavior; O2 finding the real `order-service ->
+  product-service` relation as `CONFIRMED` once both declared and observed evidence coexist on it (and
+  correctly resolving `target_id` to the *provider service*, not the raw operation, through `PROVIDES`);
+  O3 surfacing an observed-only relation with **no `PROVIDES` edge at all**, proving the
+  `OPTIONAL MATCH`/`coalesce()` fix actually matters, not just a theoretical concern; O4's literal
+  `NOT_OBSERVED_IN_WINDOW` status and `telemetry_coverage_available` correctness for both a covered and
+  an uncovered subject; environment scoping across O2-O4; O5's four coverage signals for a caller, a
+  sender/receiver, a service with zero telemetry, and the pinned provider-side gap.
+
 ## Getting started
 
 Iterations 0 and 1 need no Neo4j/Docker and can start immediately:

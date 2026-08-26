@@ -21,3 +21,5 @@ architecture_intelligence:
   telemetry:
     service_aliases: {}
     queue_aliases: {}
+  runtime_analysis:
+    default_window_hours: 24

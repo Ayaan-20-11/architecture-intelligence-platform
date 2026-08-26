@@ -36,6 +36,10 @@ class TelemetryConfig(BaseModel):
     queue_aliases: dict[str, str] = Field(default_factory=dict)
 
 
+class RuntimeAnalysisConfig(BaseModel):
+    default_window_hours: int = 24
+
+
 class AppConfig(BaseModel):
     sources: SourcesConfig = Field(default_factory=SourcesConfig)
     graph: GraphConfig = Field(default_factory=GraphConfig)
@@ -43,6 +47,7 @@ class AppConfig(BaseModel):
     llm: LLMConfig = Field(default_factory=LLMConfig)
     intent_router: IntentRouterConfig = Field(default_factory=IntentRouterConfig)
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
+    runtime_analysis: RuntimeAnalysisConfig = Field(default_factory=RuntimeAnalysisConfig)
 
     model_config = {"populate_by_name": True}
 
