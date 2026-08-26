@@ -2,11 +2,12 @@ import neo4j
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import ExportTraceServiceResponse
 
-from app.deps import get_driver, get_settings
+from app.deps import get_driver, get_http_correlation_buffer, get_settings
 from app.graph.repository import open_session
 from app.settings import Settings
 from app.telemetry.adapter import adapt
 from app.telemetry.aggregator import persist_observation_batch
+from app.telemetry.correlation_buffer import HttpCorrelationBuffer
 from app.telemetry.operation_resolver import fetch_operation_candidates
 from app.telemetry.otlp_receiver import OtlpDecodeError, decode_export_request
 from app.telemetry.queue_resolver import fetch_queue_candidates
@@ -22,6 +23,7 @@ async def post_traces(
     request: Request,
     driver: neo4j.Driver = Depends(get_driver),
     settings: Settings = Depends(get_settings),
+    correlation_buffer: HttpCorrelationBuffer | None = Depends(get_http_correlation_buffer),
 ) -> Response:
     """OTLP/HTTP trace ingestion (spec §8): decode -> resolve against declared data -> persist
     observed facts/evidence (spec §36, Iteration 11E). Content-type/decode validation happens
@@ -52,6 +54,7 @@ async def post_traces(
         queue_candidates=queue_candidates,
         service_aliases=settings.config.telemetry.service_aliases,
         queue_aliases=settings.config.telemetry.queue_aliases,
+        correlation_buffer=correlation_buffer,
     )
     persist_observation_batch(driver, database, batch)
 

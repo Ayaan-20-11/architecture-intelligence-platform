@@ -8,6 +8,7 @@ from app.telemetry.adapter import (
     correlate_http_call_observations,
     correlate_queue_observations,
 )
+from app.telemetry.correlation_buffer import HttpCorrelationBuffer
 from app.telemetry.model import RuntimeSpan
 from app.telemetry.operation_resolver import DeclaredOperationCandidate
 from app.telemetry.queue_resolver import DeclaredQueueCandidate
@@ -77,6 +78,7 @@ def _correlate(spans, **kwargs):
         service_candidates=kwargs.get("service_candidates", SERVICE_CANDIDATES),
         operation_candidates=kwargs.get("operation_candidates", OPERATION_CANDIDATES),
         service_aliases=kwargs.get("service_aliases", {}),
+        correlation_buffer=kwargs.get("correlation_buffer"),
     )
 
 
@@ -121,6 +123,56 @@ def test_empty_batch_of_spans_produces_empty_observation_batch():
     assert batch.facts == []
     assert batch.entities == []
     assert batch.unresolved == []
+
+
+# --- cross-batch correlation (11H-B) ---------------------------------------------------------
+
+
+def test_cross_batch_server_first_then_client_produces_one_calls_fact():
+    client, server = _client_server_pair()
+    buffer = HttpCorrelationBuffer(ttl_seconds=60, max_pending_spans=10000)
+
+    first = _correlate([server], correlation_buffer=buffer)
+    assert first.facts == []
+
+    second = _correlate([client], correlation_buffer=buffer)
+    assert len(second.facts) == 1
+    fact = second.facts[0]
+    assert fact.subject_id == "service:order-service"
+    assert fact.object_id == "operation:product-service:GET:/products/{id}"
+    assert fact.environment == "production"
+    assert buffer.cross_batch_matches == 1
+
+
+def test_cross_batch_client_first_then_server_produces_one_calls_fact():
+    client, server = _client_server_pair()
+    buffer = HttpCorrelationBuffer(ttl_seconds=60, max_pending_spans=10000)
+
+    first = _correlate([client], correlation_buffer=buffer)
+    assert first.facts == []
+
+    second = _correlate([server], correlation_buffer=buffer)
+    assert len(second.facts) == 1
+    fact = second.facts[0]
+    assert fact.subject_id == "service:order-service"
+    assert fact.object_id == "operation:product-service:GET:/products/{id}"
+    assert buffer.cross_batch_matches == 1
+
+
+def test_buffer_none_preserves_single_batch_only_behavior():
+    client, server = _client_server_pair()
+    first = _correlate([client], correlation_buffer=None)
+    second = _correlate([server], correlation_buffer=None)
+    assert first.facts == []
+    assert second.facts == []
+
+
+def test_leftover_server_missing_route_is_unresolved_not_buffered():
+    _, server = _client_server_pair(attributes={})
+    buffer = HttpCorrelationBuffer(ttl_seconds=60, max_pending_spans=10000)
+    batch = _correlate([server], correlation_buffer=buffer)
+    assert [u.reason for u in batch.unresolved] == [NO_STABLE_ROUTE]
+    assert buffer.cross_batch_matches == 0
 
 
 # --- unresolved reasons --------------------------------------------------------------------------

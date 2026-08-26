@@ -7,6 +7,7 @@ from app.ai.provider import LLMProvider
 from app.ai.question_service import ArchitectureQuestionService
 from app.graph.repository import open_session
 from app.settings import Settings
+from app.telemetry.correlation_buffer import HttpCorrelationBuffer
 
 
 def get_settings(request: Request) -> Settings:
@@ -22,6 +23,12 @@ def get_read_session(request: Request) -> Iterator[neo4j.Session]:
     driver = get_driver(request)
     with open_session(driver, database=settings.config.graph.database, read_only=True) as session:
         yield session
+
+
+def get_http_correlation_buffer(request: Request) -> HttpCorrelationBuffer | None:
+    """None when http-correlation is disabled via config (or in tests that never set it up) - the
+    same optional-object pattern as get_llm_provider's own app.state lookup."""
+    return getattr(request.app.state, "http_correlation_buffer", None)
 
 
 def get_llm_provider(request: Request) -> LLMProvider:

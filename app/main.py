@@ -22,6 +22,7 @@ from app.api import (
 from app.deps import get_driver, get_settings
 from app.graph.repository import build_driver, open_session
 from app.settings import Settings, load_settings
+from app.telemetry.correlation_buffer import HttpCorrelationBuffer
 
 CONFIG_PATH = Path(os.environ.get("CONFIG_PATH", "config.yaml"))
 
@@ -37,6 +38,15 @@ async def lifespan(app: FastAPI):
         app.state.llm_provider = OpenAIProvider(api_key=settings.secrets.openai_api_key)
     else:
         app.state.llm_provider = None
+    http_correlation = settings.config.telemetry.http_correlation
+    app.state.http_correlation_buffer = (
+        HttpCorrelationBuffer(
+            ttl_seconds=http_correlation.ttl_seconds,
+            max_pending_spans=http_correlation.max_pending_spans,
+        )
+        if http_correlation.enabled
+        else None
+    )
     yield
     app.state.driver.close()
 

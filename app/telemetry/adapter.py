@@ -1,7 +1,9 @@
+from datetime import datetime
 from typing import Literal
 
 from app.canonical import ids
 from app.provenance.model import ObservedEvidence
+from app.telemetry.correlation_buffer import HttpCorrelationBuffer, PendingHttpSpan
 from app.telemetry.model import (
     DiscoveryStatus,
     ObservationBatch,
@@ -19,26 +21,46 @@ from app.telemetry.semconv.messaging import (
     MESSAGING_OPERATION_TYPE,
     MESSAGING_SYSTEM,
 )
-from app.telemetry.service_resolver import DeclaredServiceCandidate, resolve_runtime_span
+from app.telemetry.service_resolver import (
+    DeclaredServiceCandidate,
+    resolve_runtime_span,
+    resolve_service,
+)
 
 NO_ENVIRONMENT = "no_environment"
 NO_STABLE_ROUTE = "no_stable_route"
 NO_DESTINATION_NAME = "no_destination_name"
 
 
-def _find_correlated_pairs(spans: list[RuntimeSpan]) -> list[tuple[RuntimeSpan, RuntimeSpan]]:
+def _find_correlated_pairs(
+    spans: list[RuntimeSpan],
+) -> tuple[list[tuple[RuntimeSpan, RuntimeSpan]], list[RuntimeSpan], list[RuntimeSpan]]:
     """Pairs each SERVER span with its correlated CLIENT span (same trace_id,
-    server.parent_span_id == client.span_id) WITHIN this list only. An unpaired span in this batch
-    (either kind) contributes nothing - see correlate_http_call_observations's docstring."""
+    server.parent_span_id == client.span_id) WITHIN this list only, and also returns the CLIENT/
+    SERVER spans that didn't pair up in this batch - candidates for cross-batch correlation via an
+    HttpCorrelationBuffer (11H R2/spec §6), if the caller supplies one. A SERVER span with no
+    parent_span_id can never pair with anything by construction and is silently excluded from both
+    the pairs and the leftover-server list, exactly as it was silently excluded before."""
     clients_by_key = {(s.trace_id, s.span_id): s for s in spans if s.span_kind == "CLIENT"}
+    matched_client_keys: set[tuple[str, str]] = set()
     pairs = []
+    leftover_servers = []
     for span in spans:
         if span.span_kind != "SERVER" or span.parent_span_id is None:
             continue
-        client = clients_by_key.get((span.trace_id, span.parent_span_id))
+        key = (span.trace_id, span.parent_span_id)
+        client = clients_by_key.get(key)
         if client is not None:
             pairs.append((client, span))
-    return pairs
+            matched_client_keys.add(key)
+        else:
+            leftover_servers.append(span)
+    leftover_clients = [
+        s
+        for s in spans
+        if s.span_kind == "CLIENT" and (s.trace_id, s.span_id) not in matched_client_keys
+    ]
+    return pairs, leftover_clients, leftover_servers
 
 
 def _record_if_observed_only(
@@ -53,33 +75,131 @@ def _record_if_observed_only(
         entities[entity_id] = ObservedOnlyEntity(id=entity_id, label=label, name=name)
 
 
+def _build_call_fact(
+    *,
+    operation_candidates: list[DeclaredOperationCandidate],
+    entities: dict[str, ObservedOnlyEntity],
+    caller_service_id: str,
+    provider_service_id: str,
+    caller_service_version: str | None,
+    environment: str,
+    method: str,
+    route: str,
+    timestamp: datetime,
+    trace_id: str,
+) -> ObservedFactCandidate | None:
+    """Shared CALLS-fact core for both in-batch and cross-batch correlated observations, once both
+    sides' service identity is already resolved and environment/method/route are known to be
+    present - the piece of fact-construction logic (operation resolution, evidence, the fact
+    itself) that's identical regardless of how the CLIENT/SERVER pair was correlated. Returns None
+    (never guessed) if the operation can't be resolved - callers report NO_STABLE_ROUTE."""
+    operation = resolve_operation(
+        operation_candidates, provider_service_id=provider_service_id, method=method, route=route
+    )
+    if operation.operation_id is None:
+        return None
+    _record_if_observed_only(
+        entities,
+        entity_id=operation.operation_id,
+        discovery_status=operation.discovery_status,
+        label="Operation",
+        name=f"{method} {route}",
+    )
+
+    bucket_start, bucket_end = day_bucket(timestamp)
+    evidence_id = ids.observed_evidence_id(
+        environment, bucket_start, caller_service_id, "CALLS", operation.operation_id
+    )
+    evidence = ObservedEvidence(
+        id=evidence_id,
+        environment=environment,
+        bucket_start=bucket_start,
+        bucket_end=bucket_end,
+        first_seen=timestamp,
+        last_seen=timestamp,
+        observation_count=1,
+        sample_trace_ids=[trace_id],
+        service_version=caller_service_version,
+    )
+    return ObservedFactCandidate(
+        subject_id=caller_service_id,
+        relation_type="CALLS",
+        object_id=operation.operation_id,
+        environment=environment,
+        timestamp=timestamp,
+        trace_id=trace_id,
+        source_service_version=caller_service_version,
+        evidence=evidence,
+    )
+
+
+def _pending_span_from_server(server: RuntimeSpan, *, method: str, route: str) -> PendingHttpSpan:
+    return PendingHttpSpan(
+        trace_id=server.trace_id,
+        span_id=server.span_id,
+        parent_span_id=server.parent_span_id,
+        span_kind="SERVER",
+        service_name=server.service_name,
+        service_namespace=server.service_namespace,
+        service_version=server.service_version,
+        environment=server.environment,
+        method=method,
+        route=route,
+        timestamp=server.end_time,
+    )
+
+
+def _pending_span_from_client(client: RuntimeSpan) -> PendingHttpSpan:
+    return PendingHttpSpan(
+        trace_id=client.trace_id,
+        span_id=client.span_id,
+        parent_span_id=client.parent_span_id,
+        span_kind="CLIENT",
+        service_name=client.service_name,
+        service_namespace=client.service_namespace,
+        service_version=client.service_version,
+        environment=client.environment,
+        timestamp=client.end_time,
+    )
+
+
 def correlate_http_call_observations(
     spans: list[RuntimeSpan],
     *,
     service_candidates: list[DeclaredServiceCandidate],
     operation_candidates: list[DeclaredOperationCandidate],
     service_aliases: dict[str, str],
+    correlation_buffer: HttpCorrelationBuffer | None = None,
 ) -> ObservationBatch:
     """Correlates HTTP CLIENT/SERVER span pairs into observed CALLS relationships (spec §20-23).
 
-    Correlation is scoped to spans present in this one decoded OTLP batch only. A call whose client
-    and server spans are exported in different /v1/traces POSTs produces zero observations here -
-    an accepted, permanent PoC limitation (real OTel Collector batch processors flush by time/size,
-    not trace completeness, so this is a genuine and not-rare gap for async/cross-service calls),
-    not a bug. Building cross-batch stateful pairing (buffering spans across requests with an
-    eviction policy) is exactly the "trace store"/causality graph spec §4.2 explicitly excludes.
+    Pairing happens in two phases. First, within this one decoded OTLP batch
+    (_find_correlated_pairs). Second, for whichever CLIENT/SERVER spans didn't pair up in this
+    batch, against a caller-supplied HttpCorrelationBuffer (11H R2/spec §6) - a bounded, TTL-based,
+    in-memory store of spans still awaiting their counterpart from a *different* /v1/traces POST.
+    This supersedes H4's original single-batch-only limitation: real OTel Collector batch
+    processors flush by time/size, not trace completeness, so a call's two sides frequently arrive
+    in separate batches - the buffer (never a Neo4j Span store, never unbounded, spec
+    §6.3/§13/§14) closes that gap while still never becoming the "trace store"/causality graph
+    this platform deliberately stays out of. Passing correlation_buffer=None (the default) skips
+    the second phase entirely, preserving exactly the original single-batch-only behavior -
+    existing callers/tests are unaffected.
 
-    Environment, method, route, and timestamp are read from the SERVER span, not the client - this
-    is necessary, not just a style choice: declared Operation ids are minted from the provider's own
-    OpenAPI path, so sourcing the route from the client's url.template instead risks a lexical
-    mismatch against the declared path string, silently breaking Fall A matching (H4.6).
-    source_service_version comes from the CLIENT span (the "source"/calling side).
+    Environment, method, route, and timestamp are always read from the SERVER span, not the
+    client - this is necessary, not just a style choice: declared Operation ids are minted from
+    the provider's own OpenAPI path, so sourcing the route from the client's url.template instead
+    risks a lexical mismatch against the declared path string, silently breaking Fall A matching
+    (H4.6). This holds identically whether the SERVER span was seen in-batch or arrived from the
+    correlation buffer. source_service_version comes from the CLIENT span (the "source"/calling
+    side) in both phases too.
     """
     facts: list[ObservedFactCandidate] = []
     entities: dict[str, ObservedOnlyEntity] = {}
     unresolved: list[UnresolvedObservation] = []
 
-    for client, server in _find_correlated_pairs(spans):
+    pairs, leftover_clients, leftover_servers = _find_correlated_pairs(spans)
+
+    for client, server in pairs:
         caller = resolve_runtime_span(service_candidates, client, aliases=service_aliases)
         provider = resolve_runtime_span(service_candidates, server, aliases=service_aliases)
         _record_if_observed_only(
@@ -113,53 +233,130 @@ def correlate_http_call_observations(
             )
             continue
 
-        operation = resolve_operation(
-            operation_candidates,
+        fact = _build_call_fact(
+            operation_candidates=operation_candidates,
+            entities=entities,
+            caller_service_id=caller.service_id,
             provider_service_id=provider.service_id,
+            caller_service_version=client.service_version,
+            environment=server.environment,
             method=method,
             route=route,
+            timestamp=server.end_time,
+            trace_id=server.trace_id,
         )
-        if operation.operation_id is None:
+        if fact is None:
             unresolved.append(
                 UnresolvedObservation(trace_id=server.trace_id, reason=NO_STABLE_ROUTE)
             )
             continue
-        _record_if_observed_only(
-            entities,
-            entity_id=operation.operation_id,
-            discovery_status=operation.discovery_status,
-            label="Operation",
-            name=f"{method} {route}",
-        )
+        facts.append(fact)
 
-        timestamp = server.end_time
-        bucket_start, bucket_end = day_bucket(timestamp)
-        evidence_id = ids.observed_evidence_id(
-            server.environment, bucket_start, caller.service_id, "CALLS", operation.operation_id
-        )
-        evidence = ObservedEvidence(
-            id=evidence_id,
-            environment=server.environment,
-            bucket_start=bucket_start,
-            bucket_end=bucket_end,
-            first_seen=timestamp,
-            last_seen=timestamp,
-            observation_count=1,
-            sample_trace_ids=[server.trace_id],
-            service_version=client.service_version,
-        )
-        facts.append(
-            ObservedFactCandidate(
-                subject_id=caller.service_id,
-                relation_type="CALLS",
-                object_id=operation.operation_id,
-                environment=server.environment,
-                timestamp=timestamp,
-                trace_id=server.trace_id,
-                source_service_version=client.service_version,
-                evidence=evidence,
+    if correlation_buffer is not None:
+        for server in leftover_servers:
+            if not server.environment:
+                unresolved.append(
+                    UnresolvedObservation(trace_id=server.trace_id, reason=NO_ENVIRONMENT)
+                )
+                continue
+            method = server.attributes.get(HTTP_REQUEST_METHOD)
+            route = server.attributes.get(HTTP_ROUTE) or server.attributes.get(URL_TEMPLATE)
+            if not method or not route:
+                unresolved.append(
+                    UnresolvedObservation(trace_id=server.trace_id, reason=NO_STABLE_ROUTE)
+                )
+                continue
+
+            provider = resolve_runtime_span(service_candidates, server, aliases=service_aliases)
+            _record_if_observed_only(
+                entities,
+                entity_id=provider.service_id,
+                discovery_status=provider.discovery_status,
+                label="Service",
+                name=server.service_name,
             )
-        )
+
+            matched_client = correlation_buffer.offer_server(
+                _pending_span_from_server(server, method=method, route=route)
+            )
+            if matched_client is None:
+                continue
+
+            caller = resolve_service(
+                service_candidates,
+                service_name=matched_client.service_name,
+                service_namespace=matched_client.service_namespace,
+                aliases=service_aliases,
+            )
+            _record_if_observed_only(
+                entities,
+                entity_id=caller.service_id,
+                discovery_status=caller.discovery_status,
+                label="Service",
+                name=matched_client.service_name,
+            )
+
+            fact = _build_call_fact(
+                operation_candidates=operation_candidates,
+                entities=entities,
+                caller_service_id=caller.service_id,
+                provider_service_id=provider.service_id,
+                caller_service_version=matched_client.service_version,
+                environment=server.environment,
+                method=method,
+                route=route,
+                timestamp=server.end_time,
+                trace_id=server.trace_id,
+            )
+            if fact is not None:
+                facts.append(fact)
+
+        for client in leftover_clients:
+            caller = resolve_runtime_span(service_candidates, client, aliases=service_aliases)
+            _record_if_observed_only(
+                entities,
+                entity_id=caller.service_id,
+                discovery_status=caller.discovery_status,
+                label="Service",
+                name=client.service_name,
+            )
+
+            matched_server = correlation_buffer.offer_client(_pending_span_from_client(client))
+            if matched_server is None:
+                continue
+            # Every SERVER PendingHttpSpan the buffer ever stores was validated (environment,
+            # method, route all present) before being offered - see the leftover_servers loop
+            # above, the only place offer_server() is ever called.
+            assert matched_server.environment and matched_server.method and matched_server.route
+
+            provider = resolve_service(
+                service_candidates,
+                service_name=matched_server.service_name,
+                service_namespace=matched_server.service_namespace,
+                aliases=service_aliases,
+            )
+            _record_if_observed_only(
+                entities,
+                entity_id=provider.service_id,
+                discovery_status=provider.discovery_status,
+                label="Service",
+                name=matched_server.service_name,
+            )
+
+            fact = _build_call_fact(
+                operation_candidates=operation_candidates,
+                entities=entities,
+                caller_service_id=caller.service_id,
+                provider_service_id=provider.service_id,
+                caller_service_version=client.service_version,
+                environment=matched_server.environment,
+                method=matched_server.method,
+                route=matched_server.route,
+                timestamp=matched_server.timestamp,
+                trace_id=matched_server.trace_id,
+            )
+            if fact is not None:
+                facts.append(fact)
 
     return ObservationBatch(entities=list(entities.values()), facts=facts, unresolved=unresolved)
 
@@ -272,6 +469,7 @@ def adapt(
     queue_candidates: list[DeclaredQueueCandidate],
     service_aliases: dict[str, str],
     queue_aliases: dict[str, str],
+    correlation_buffer: HttpCorrelationBuffer | None = None,
 ) -> ObservationBatch:
     """Combines HTTP and queue observations from one decoded OTLP batch into a single
     ObservationBatch (spec §9's OpenTelemetryAdapter stage).
@@ -286,6 +484,7 @@ def adapt(
         service_candidates=service_candidates,
         operation_candidates=operation_candidates,
         service_aliases=service_aliases,
+        correlation_buffer=correlation_buffer,
     )
     queue_batch = correlate_queue_observations(
         spans,

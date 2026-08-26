@@ -12,6 +12,7 @@ from app.canonical import ids
 from app.graph.importer import import_all_sources
 from app.main import create_app
 from app.settings import AppConfig, Secrets, Settings
+from app.telemetry.correlation_buffer import HttpCorrelationBuffer
 
 EXAMPLES_DIR = Path(__file__).resolve().parent.parent.parent / "examples"
 DATABASE = "neo4j"
@@ -64,32 +65,37 @@ def client(driver):
     return TestClient(_build_app(driver))
 
 
-def _resource_spans(*, client_service: str, server_service: str, method: str, route: str) -> bytes:
-    client_span_id = bytes.fromhex("b7ad6b7169203331")
-    trace_id = bytes.fromhex("4bf92f3577b34da6a3ce929d0e0e4736")
+_CLIENT_SPAN_ID = bytes.fromhex("b7ad6b7169203331")
+_SERVER_SPAN_ID = bytes.fromhex("00f067aa0ba902b7")
+_TRACE_ID = bytes.fromhex("4bf92f3577b34da6a3ce929d0e0e4736")
 
-    client_resource = Resource(
+
+def _client_resource_spans(*, client_service: str, method: str, route: str) -> ResourceSpans:
+    resource = Resource(
         attributes=[KeyValue(key="service.name", value=AnyValue(string_value=client_service))]
     )
-    client_span = Span(
-        trace_id=trace_id,
-        span_id=client_span_id,
+    span = Span(
+        trace_id=_TRACE_ID,
+        span_id=_CLIENT_SPAN_ID,
         name=f"{method} {route}",
         kind=Span.SPAN_KIND_CLIENT,
         start_time_unix_nano=1_700_000_000_000_000_000,
         end_time_unix_nano=1_700_000_000_050_000_000,
     )
+    return ResourceSpans(resource=resource, scope_spans=[ScopeSpans(spans=[span])])
 
-    server_resource = Resource(
+
+def _server_resource_spans(*, server_service: str, method: str, route: str) -> ResourceSpans:
+    resource = Resource(
         attributes=[
             KeyValue(key="service.name", value=AnyValue(string_value=server_service)),
             KeyValue(key="deployment.environment.name", value=AnyValue(string_value="production")),
         ]
     )
-    server_span = Span(
-        trace_id=trace_id,
-        span_id=bytes.fromhex("00f067aa0ba902b7"),
-        parent_span_id=client_span_id,
+    span = Span(
+        trace_id=_TRACE_ID,
+        span_id=_SERVER_SPAN_ID,
+        parent_span_id=_CLIENT_SPAN_ID,
         name=f"{method} {route}",
         kind=Span.SPAN_KIND_SERVER,
         start_time_unix_nano=1_700_000_000_010_000_000,
@@ -99,11 +105,14 @@ def _resource_spans(*, client_service: str, server_service: str, method: str, ro
             KeyValue(key="http.route", value=AnyValue(string_value=route)),
         ],
     )
+    return ResourceSpans(resource=resource, scope_spans=[ScopeSpans(spans=[span])])
 
+
+def _resource_spans(*, client_service: str, server_service: str, method: str, route: str) -> bytes:
     request = ExportTraceServiceRequest(
         resource_spans=[
-            ResourceSpans(resource=client_resource, scope_spans=[ScopeSpans(spans=[client_span])]),
-            ResourceSpans(resource=server_resource, scope_spans=[ScopeSpans(spans=[server_span])]),
+            _client_resource_spans(client_service=client_service, method=method, route=route),
+            _server_resource_spans(server_service=server_service, method=method, route=route),
         ]
     )
     return request.SerializeToString()
@@ -140,3 +149,55 @@ def test_valid_payload_persists_an_observed_call_and_returns_200(client, session
     assert evidence["source_type"] == "OPENTELEMETRY"
     assert evidence["evidence_type"] == "OBSERVED"
     assert evidence["environment"] == "production"
+
+
+def _build_app_with_correlation_buffer(driver):
+    app = _build_app(driver)
+    app.state.http_correlation_buffer = HttpCorrelationBuffer(
+        ttl_seconds=60, max_pending_spans=10000
+    )
+    return app
+
+
+@pytest.fixture
+def client_with_correlation_buffer(driver):
+    return TestClient(_build_app_with_correlation_buffer(driver))
+
+
+def test_cross_batch_client_and_server_in_separate_requests_produce_one_calls_relation(
+    client_with_correlation_buffer, session
+):
+    # 11H-B / I2: a CLIENT span delivered in one POST /v1/traces and its matching SERVER span
+    # delivered in a later, separate POST must still produce exactly one CALLS relation. Targets
+    # an undeclared ReviewService/route, distinct from the module's other test's declared
+    # order-service -> product-service relation, since this module has no per-test Neo4j reset.
+    client_only = ExportTraceServiceRequest(
+        resource_spans=[
+            _client_resource_spans(
+                client_service="OrderService", method="GET", route="/reviews/{id}"
+            )
+        ]
+    ).SerializeToString()
+    server_only = ExportTraceServiceRequest(
+        resource_spans=[
+            _server_resource_spans(
+                server_service="ReviewService", method="GET", route="/reviews/{id}"
+            )
+        ]
+    ).SerializeToString()
+
+    subject_id = ids.service_id("order-service")
+    object_id = ids.operation_id(ids.service_id("reviewservice"), "GET", "/reviews/{id}")
+    count_query = "MATCH (a {id: $subject_id})-[r:CALLS]->(b {id: $object_id}) RETURN count(r) AS c"
+
+    response_a = client_with_correlation_buffer.post(
+        "/v1/traces", content=client_only, headers={"content-type": _CONTENT_TYPE}
+    )
+    assert response_a.status_code == 200
+    assert session.run(count_query, subject_id=subject_id, object_id=object_id).single()["c"] == 0
+
+    response_b = client_with_correlation_buffer.post(
+        "/v1/traces", content=server_only, headers={"content-type": _CONTENT_TYPE}
+    )
+    assert response_b.status_code == 200
+    assert session.run(count_query, subject_id=subject_id, object_id=object_id).single()["c"] == 1

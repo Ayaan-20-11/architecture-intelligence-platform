@@ -21,6 +21,10 @@ architecture_intelligence:
   telemetry:
     service_aliases: {}
     queue_aliases: {}
+    http-correlation:
+      enabled: true
+      ttl-seconds: 60
+      max-pending-spans: 10000
   runtime_analysis:
     default_window_hours: 24
     default_environment: production

@@ -468,9 +468,12 @@ with 11A/11B.
 - `app/telemetry/adapter.py` (new - matches spec §54/§9's own "OpenTelemetryAdapter" naming) —
   `correlate_http_call_observations()`. Correlation is **scoped to spans within one decoded OTLP batch
   only**: a call whose client/server spans are exported in different `/v1/traces` POSTs produces zero
-  observations - an accepted, permanent PoC limitation (real Collector batch processors flush by
-  time/size, not trace completeness), not a bug; building cross-batch stateful pairing would be exactly
-  the "trace store"/causality graph spec §4.2 explicitly excludes. Environment/method/route/timestamp are
+  observations at this point in the codebase's history. At the time of this iteration this was treated as
+  an accepted, permanent PoC limitation (real Collector batch processors flush by time/size, not trace
+  completeness) rather than a bug worth a stateful cross-batch buffer — **this position was later
+  superseded by Iteration 11H-B**, which adds exactly such a buffer under spec's own tighter, explicitly
+  bounded constraints (TTL-based, never a Neo4j Span store, allowlisted metadata only — deliberately not
+  the unbounded "trace store"/causality graph this note originally worried about). Environment/method/route/timestamp are
   read from the **server** span, not the client - necessary, not just stylistic: declared `Operation`
   ids are minted from the provider's own OpenAPI path, so sourcing the route from the client's
   `url.template` risks a lexical mismatch that would silently break Fall A (H4.6).
@@ -809,6 +812,74 @@ but deliberately not built yet.
   evidence layered on top, proving the multi-declarer case survives with exactly the other declarer's
   DECLARED evidence and the OBSERVED evidence intact (genuinely new coverage — the original test never
   combined the multi-declarer case with observed evidence).
+
+## Iteration 11H-B — HTTP Correlation Robustness (Runtime Correctness & Robustness)
+`Architecture_Intelligence_Platform_11H_Runtime_Correctness_Robustness_Specification.md` R2/§6/§15/§16,
+§19 (I2), acceptance criteria 11H.4/11H.5/11H.14. **Exit criterion:** a CLIENT span delivered in one
+`POST /v1/traces` and its matching SERVER span delivered in a later, separate `POST /v1/traces` still
+produce exactly one `CALLS` observed fact. Second of six 11H sub-iterations; 11H-A (evidence
+reconciliation) is already committed.
+
+- `app/telemetry/correlation_buffer.py` (new) — `PendingHttpSpan` (11H spec §15's suggested shape,
+  extended with `service_namespace`/`service_version` — already-structured identity fields this codebase
+  reads from `RuntimeSpan` today, not raw/unbounded attribute data, so including them doesn't violate the
+  "no raw payload" allowlist principle spec §6.3/§13/§14 require) and `HttpCorrelationBuffer` — this
+  codebase's **first** stateful, TTL/lock/in-process-mutable construct (confirmed zero prior precedent
+  anywhere in `app/`: no cachetools, no `threading.Lock`/`asyncio.Lock`, no background task). Deliberately
+  simple: no background sweep task (matches `POST /v1/traces`'s fully synchronous, request-driven style —
+  Neo4j calls run directly on the event loop thread, so there's no true concurrent request processing to
+  defend against beyond cheap insurance); lazy, on-access eviction only, both by TTL and by a hard
+  `max_pending_spans` bound (oldest entry evicted first via `OrderedDict`'s insertion-order guarantee) —
+  must never become an unbounded trace store (spec §6.3). Both `_pending_clients`/`_pending_servers` maps
+  key on the same pairing identity a matching counterpart would look itself up under, so whichever side
+  arrives second finds the other already waiting, regardless of arrival order.
+- `app/telemetry/adapter.py` — `_find_correlated_pairs` now also returns the batch's leftover (unpaired)
+  CLIENT/SERVER spans; `correlate_http_call_observations` gains a keyword-only `correlation_buffer:
+  HttpCorrelationBuffer | None = None` parameter (default preserves exactly the original single-batch-only
+  behavior — all 23 pre-existing unit tests pass unmodified). The per-pair fact-construction logic
+  (operation resolution, evidence, the fact itself) was factored into a shared `_build_call_fact()` helper
+  reused by both the in-batch loop (unchanged behavior, confirmed via the untouched 23-test suite) and the
+  new cross-batch phase, avoiding two divergent implementations of the same core logic. Cross-batch
+  matches resolve caller/provider identity via `resolve_service()` directly (not `resolve_runtime_span()`,
+  since a buffered `PendingHttpSpan` isn't a full `RuntimeSpan`) and get `correlationMode = CLIENT_SERVER`
+  — identical to an in-batch pair (spec §6.4: the mode distinguishes evidence *strength*, not batch
+  locality; persisting `correlation_mode` itself is 11H-C's job, not built yet). A leftover SERVER span's
+  environment/method/route are validated (and reported `NO_ENVIRONMENT`/`NO_STABLE_ROUTE` if missing)
+  *before* ever being buffered — a SERVER-kind `PendingHttpSpan` in the buffer is therefore always known
+  to carry valid environment/method/route by construction, asserted explicitly where a match is consumed.
+  Rewrote the function's own docstring, which previously stated cross-batch correlation was "an accepted,
+  permanent PoC limitation... not a bug" and that a stateful buffer would be "exactly the trace store...
+  spec §4.2 explicitly excludes" — this iteration's spec deliberately supersedes that position with a
+  narrower, explicitly-bounded construct; `IMPLEMENTATION_PLAN.md`'s own 11C entry (above) making the
+  identical claim was also corrected, so no contradictory permanent-looking claims remain in the repo.
+- `app/settings.py`, `config.yaml` — new `HttpCorrelationConfig(enabled, ttl_seconds, max_pending_spans)`
+  nested under `TelemetryConfig.http_correlation` (kebab-case YAML aliases, following the existing
+  `import_`/`alias="import"` precedent — this codebase has no alias-generator convention).
+  `model_config = {"populate_by_name": True}` added to both so tests can construct these directly by
+  Python attribute name while YAML loading still works via the kebab-case alias. Defaults are safe and the
+  block is fully optional — the app starts unchanged if absent (spec §22).
+- `app/main.py` — `lifespan()` constructs `app.state.http_correlation_buffer` (or `None` if
+  `enabled=False`), mirroring the existing `app.state.driver`/`app.state.llm_provider` pattern exactly.
+  `app/deps.py` — new `get_http_correlation_buffer()` accessor, mirroring `llm_provider`'s
+  `getattr(..., None)` optional-object pattern. `app/api/telemetry.py::post_traces` injects it and passes
+  it through to `adapt()`.
+- Explicitly deferred (11H-C's job, not built yet): `CorrelationMode` enum / `correlation_mode` field
+  persistence and read-stack exposure; the `PEER_SERVICE` semconv constant; CLIENT_ONLY/SERVER_ONLY
+  single-sided observation emission (depends on this buffer existing, which it now does). Also deferred:
+  any UI/API surfacing of the buffer's diagnostic counters (spec §23 only requires they exist/are
+  loggable); Strategy B (single-sided-observation-with-later-enrichment) — spec §6.3 explicitly prefers
+  the bounded-buffer Strategy A implemented here.
+- 11 new tests (329 unit / 124 integration, up from 319/123 after 11H-A): buffer unit tests
+  (`test_correlation_buffer.py`) for both arrival orders, mismatched-trace-id non-matching, a SERVER span
+  with no `parent_span_id` never buffering/matching, TTL expiry, and `max_pending_spans` oldest-eviction;
+  additive `test_adapter.py` cases proving cross-batch correlation works in both arrival orders through
+  the real `correlate_http_call_observations()` function, that `correlation_buffer=None` preserves
+  original behavior exactly, and that a leftover SERVER span missing method/route is reported unresolved
+  rather than buffered uselessly; a new Testcontainers integration test (I2,
+  `test_telemetry_api.py`) posting a CLIENT-only OTLP batch then a separate SERVER-only OTLP batch against
+  the real FastAPI app, asserting zero `CALLS` relations after the first POST and exactly one after the
+  second — targeting an undeclared `OrderService -> ReviewService` pair distinct from the module's other
+  test's declared relation, since this test module has no per-test Neo4j reset.
 
 ## Getting started
 

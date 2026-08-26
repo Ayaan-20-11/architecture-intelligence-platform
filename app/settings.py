@@ -31,9 +31,26 @@ class IntentRouterConfig(BaseModel):
     deterministic_threshold: float = 0.90
 
 
+class HttpCorrelationConfig(BaseModel):
+    """11H R2/spec §6/§22 - the cross-batch HTTP CLIENT/SERVER correlation buffer's bounds. Must
+    stay optional with safe defaults so an existing config.yaml with none of these keys still
+    starts the app unchanged (spec §22)."""
+
+    enabled: bool = True
+    ttl_seconds: int = Field(default=60, alias="ttl-seconds")
+    max_pending_spans: int = Field(default=10000, alias="max-pending-spans")
+
+    model_config = {"populate_by_name": True}
+
+
 class TelemetryConfig(BaseModel):
     service_aliases: dict[str, str] = Field(default_factory=dict)
     queue_aliases: dict[str, str] = Field(default_factory=dict)
+    http_correlation: HttpCorrelationConfig = Field(
+        default_factory=HttpCorrelationConfig, alias="http-correlation"
+    )
+
+    model_config = {"populate_by_name": True}
 
 
 class RuntimeAnalysisConfig(BaseModel):
