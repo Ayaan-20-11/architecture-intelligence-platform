@@ -9,6 +9,7 @@ dependencies = [
     "jsonschema>=4.26.0",
     "neo4j>=6.2.0",
     "openai>=3.3.1",
+    "opentelemetry-proto>=1.44.0",
     "pydantic>=2",
     "pyyaml>=6.0.3",
     "uvicorn[standard]>=0.52.4",

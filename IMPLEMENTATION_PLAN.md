@@ -336,6 +336,48 @@ guidance.
   additions proving a deterministic question succeeds with zero LLM configured and that its rows match
   the equivalent `GET /api/analysis/...` endpoint exactly (AC-H3-4).
 
+## Iteration 11A — OTLP Foundation (H4)
+`Architecture_Intelligence_Platform_H4_OpenTelemetry_Specification.md` §8-§11, §32-§33, §54, §61, §67.
+**Exit criterion:** an OTLP/HTTP protobuf trace export can be posted to `POST /v1/traces` and correctly
+decoded into the internal `RuntimeSpan` model — no graph update yet. First of H4's seven sub-iterations
+(11A-11G); scoped to just this slice per the user's explicit choice, continuing H1-H3's one-sub-iteration-
+at-a-time approach.
+
+- `pyproject.toml` — new runtime dependency `opentelemetry-proto>=1.44.0` (pulls in `protobuf` only) —
+  ships just the generated protobuf message classes for the OTLP wire format, no SDK/exporters.
+- `app/telemetry/model.py` — `RuntimeSpan(BaseModel)` per spec §10 literally; explicitly a temporary
+  ingestion model, never persisted to Neo4j.
+- `app/telemetry/semconv/resources.py` — the 5 resource-attribute key constants the receiver needs
+  (`service.name`/`service.namespace`/`service.version`/`service.instance.id`/
+  `deployment.environment.name`), centralizing OTel attribute names per spec §33. `semconv/http.py`/
+  `messaging.py` deferred to 11C/11D, which don't exist yet.
+- `app/telemetry/otlp_receiver.py` — `OtlpDecodeError(ValueError)` (matching the `CypherValidationError`/
+  `SemanticValidationError` precedent) and `decode_export_request(raw: bytes) -> list[RuntimeSpan]`:
+  parses the protobuf, extracts each `ResourceSpans` block's service identity once, and builds one
+  `RuntimeSpan` per `Span` (hex-encoding trace/span/parent-span IDs, mapping the `SpanKind` enum to a
+  friendly string, converting nanosecond timestamps to UTC `datetime`, unwrapping `AnyValue` attributes
+  unfiltered — allowlisting deferred to whichever later iteration actually persists data). A
+  `ResourceSpans` block with no `service.name` has its spans silently skipped, not erroring the whole
+  batch — OTLP batches legitimately mix multiple services per export, so one misconfigured SDK shouldn't
+  black-hole every other service's data in the same request.
+- `app/api/telemetry.py` (new) — `POST /v1/traces` (top-level path, not `/api`-prefixed, per OTLP/HTTP
+  convention): validates `Content-Type: application/x-protobuf` (415 otherwise), decodes the body,
+  returns an empty protobuf `ExportTraceServiceResponse` ack on success or 400 on `OtlpDecodeError`. Zero
+  `Depends()` — no Neo4j/settings needed yet, unlike every other existing route. `app/main.py` registers
+  the router; decoded `RuntimeSpan`s are discarded after decoding, since 11A has nothing to do with them.
+- Explicitly deferred: everything downstream of `RuntimeSpan` (`adapter.py`, `service_resolver.py`/
+  `operation_resolver.py`/`queue_resolver.py`, `aggregator.py`, any Neo4j writes — 11B-11E); O1-O5
+  runtime analyses, `/api/runtime/*`, Service Explorer UI additions, new intent-router entries (11F-11G);
+  Docker Compose/OTel Collector infrastructure (no value before more of the pipeline exists to receive
+  the data); attribute allowlisting (deferred to the iteration that actually persists data).
+- 20 new tests (241 unit / 79 integration, up from 221/79): pure-decode cases (resource identity
+  extraction, optional-field defaults, no cross-contamination between resource blocks, all 6 `SpanKind`
+  values, ID hex-encoding, root vs. child `parent_span_id`, scalar attribute decoding, a service-name-less
+  block skipped not erroring, malformed payload, empty batch) and a `TestClient`-based route suite (valid
+  payload → 200 + parseable ack, wrong content-type → 415, malformed body → 400) — placed in `tests/unit/`
+  despite being FastAPI-based, since the route needs zero Neo4j/Docker and reusing `test_api.py`'s
+  container-backed fixtures would add infra this route never touches.
+
 ## Getting started
 
 Iterations 0 and 1 need no Neo4j/Docker and can start immediately:
