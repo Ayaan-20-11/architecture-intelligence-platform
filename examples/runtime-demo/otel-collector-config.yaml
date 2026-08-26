@@ -1,0 +1,49 @@
+# OpenTelemetry Collector demo configuration (11H R5/spec §9.4).
+#
+# Values here are synthetic and environment-neutral - no real hostnames, credentials, or
+# production endpoints. `architecture-intelligence` resolves via Docker Compose service DNS
+# (docker-compose.demo.yml); swap it for a real Collector deployment's egress target outside the
+# demo.
+#
+# Minimum requirement (spec §9.2): Collector -> AIP forwarding. The `debug` exporter below is the
+# optional second leg of the topology diagram (a stand-in for "an additional tracing backend"),
+# demonstrating that AIP is one telemetry consumer among possibly several, never the only one.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 100
+
+exporters:
+  # The only required leg of the topology (spec §9.2): forwards every trace batch to AIP's OTLP
+  # ingestion boundary. `endpoint` is the base URL - the exporter appends /v1/traces itself.
+  otlphttp/aip:
+    endpoint: http://architecture-intelligence:8000
+    tls:
+      insecure: true
+    # AIP's `/v1/traces` reads the raw request body as an uncompressed protobuf message (spec §8) -
+    # it doesn't negotiate Content-Encoding, so compression must be disabled on this leg. The
+    # exporter's default (gzip) would otherwise make every export a 400.
+    compression: none
+
+  # Stands in for "optional trace backend / debug exporter" (spec §9.2) - prints received spans to
+  # the Collector's own stdout. A real deployment would point this leg at a primary observability
+  # backend instead (Jaeger, Tempo, a vendor APM, ...); see README.md's failure-isolation note
+  # (11H R6/spec §10) for why that pairing matters in production.
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/aip, debug]

@@ -42,3 +42,50 @@ works out of the box against this repo's fixture services. Or run the full stack
 ```bash
 docker compose up
 ```
+
+## Runtime telemetry (OpenTelemetry)
+
+`POST /v1/traces` is AIP's OTLP/HTTP ingestion boundary (protobuf `ExportTraceServiceRequest`,
+`Content-Type: application/x-protobuf`) - the only valid way to send AIP runtime observations. It
+resolves incoming spans against whatever's already declared in the graph and persists observed
+facts/evidence alongside the declared ones, never inventing a fact it can't trace back to real
+telemetry.
+
+**AIP is an additional telemetry consumer, not the primary observability backend.** It must never
+be the only thing an OTel Collector forwards to, and its own availability must never affect an
+application's normal observability. The recommended production topology fans a Collector's export
+out to both:
+
+```text
+Applications
+     |
+     v
+OTel Collector
+     |
+     +----> Primary observability backend (Jaeger, Tempo, a vendor APM, ...)
+     |
+     +----> Architecture Intelligence Platform
+```
+
+Failure isolation, buffering, and retry behavior belong in the Collector/deployment configuration
+(the exporter queue, sending-queue persistence, retry-on-failure), not in AIP - `/v1/traces` does
+no buffering or retry of its own, by design.
+
+### Runtime demo
+
+```bash
+docker compose -f docker-compose.demo.yml up --build
+```
+
+Brings up `architecture-intelligence` + `neo4j` (as above) plus an `otel-collector` service
+(config: `examples/runtime-demo/otel-collector-config.yaml`) and a `traffic-generator` that emits
+realistic synthetic OTLP traces for the `examples/` fixture topology (order-service calling
+product-service, order-service sending to payment-q, payment-service relaying to invoice-q) every
+few seconds - see `examples/runtime-demo/traffic_generator.py`'s docstring for why this repo
+generates spans directly rather than running real HTTP services. The Collector forwards every
+batch to AIP's `/v1/traces` and, in parallel, to a `debug` exporter that prints spans to its own
+stdout - standing in for "an additional tracing backend" in the topology diagram above.
+
+Once it's running, `POST /api/import` (as above) to declare the fixture topology, then watch
+`GET /api/runtime/relations?environment=demo` fill in with `OBSERVED`/`CONFIRMED` relations as the
+generator's traffic lands.

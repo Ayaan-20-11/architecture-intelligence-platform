@@ -1,0 +1,67 @@
+# Runtime Telemetry Demo (11H R5/spec §9) - demonstrates the full observability path:
+#
+#   traffic-generator --> otel-collector --> architecture-intelligence (+ neo4j)
+#                                        \--> debug exporter (stands in for a real trace backend)
+#
+# AIP is an *additional* telemetry consumer here, never the only one and never the primary
+# observability backend - see README.md's "Runtime telemetry demo" section (11H.16) and the
+# failure-isolation note there (11H R6/spec §10) for why a real deployment must not let AIP being
+# down affect an application's normal observability.
+#
+# Usage: docker compose -f docker-compose.demo.yml up
+
+services:
+  architecture-intelligence:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?set NEO4J_PASSWORD in .env}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    depends_on:
+      neo4j:
+        condition: service_healthy
+
+  neo4j:
+    image: neo4j:5
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:?set NEO4J_PASSWORD in .env}
+    volumes:
+      - neo4j-demo-data:/data
+      - neo4j-demo-logs:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:7474 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  otel-collector:
+    image: otel/opentelemetry-collector:latest
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./examples/runtime-demo/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+    depends_on:
+      - architecture-intelligence
+
+  # Plays the role of "Demo Services" (spec §9.3) - see traffic_generator.py's docstring for why
+  # this repo generates realistic synthetic spans directly rather than running real HTTP services.
+  traffic-generator:
+    build: examples/runtime-demo
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      DEMO_ENVIRONMENT: demo
+      TRAFFIC_INTERVAL_SECONDS: "5"
+    depends_on:
+      - otel-collector
+
+volumes:
+  neo4j-demo-data:
+  neo4j-demo-logs:

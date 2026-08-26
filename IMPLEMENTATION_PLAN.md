@@ -1081,6 +1081,63 @@ re-verified unchanged). Fifth of six 11H sub-iterations; 11H-A/B/C/D (`12a7a0d`/
   now asserts `"coverage: NONE"` renders, and the two profile tests the bug fix changed now assert the real
   `PARTIAL` classification.
 
+## Iteration 11H-F — OpenTelemetry Collector Demo Topology (Runtime Correctness & Robustness)
+`Architecture_Intelligence_Platform_11H_Runtime_Correctness_Robustness_Specification.md` R5/R6/§9/§10,
+acceptance criteria 11H.15/11H.16. **Exit criterion:** the public demo shows `Demo Services -> OTel
+Collector -> Architecture Intelligence Platform` end-to-end, without requiring AIP to act as the
+application's primary observability backend; documentation states that principle explicitly. Sixth and
+final 11H sub-iteration; 11H-A through 11H-E (`12a7a0d`/`e2da3ef`/`d9c513a`/`0559509`/`64bf0cd`) are already
+committed.
+
+- `examples/runtime-demo/otel-collector-config.yaml` — new OTel Collector config: an `otlp` receiver
+  (grpc+http), a `batch` processor, and two exporters - `otlphttp/aip` (the required leg, spec §9.2:
+  forwards to AIP's `/v1/traces`) and `debug` (the optional second leg, standing in for "an additional
+  tracing backend"). Environment-neutral/synthetic values throughout (spec §9.4).
+- `examples/runtime-demo/traffic_generator.py` — new standalone script playing the role of "Demo Services"
+  in the topology diagram. Rather than standing up four real, separately-running HTTP microservices (the
+  `examples/` fixtures are OpenAPI/AsyncAPI *documents*, not runnable applications - explicitly out of
+  scope per this repo's own CLAUDE.md), it builds realistic `ExportTraceServiceRequest` protobuf batches
+  matching the exact `examples/` topology (order-service CLIENT/SERVER pair calling product-service's
+  `GET /products/{id}`; order-service SENDS payment-q; payment-service RECEIVES payment-q and SENDS
+  invoice-q; invoice-service RECEIVES invoice-q) and POSTs them to the Collector's OTLP/HTTP receiver on a
+  loop, using only `opentelemetry-proto` (already a project dependency, and the same building pattern this
+  repo's own integration tests already use) - no OpenTelemetry SDK, no new dependencies.
+  `examples/runtime-demo/Dockerfile` packages it as its own tiny image.
+- `docker-compose.demo.yml` (new, repo root) — `architecture-intelligence` + `neo4j` (mirroring
+  `docker-compose.yml`) plus `otel-collector` (official `otel/opentelemetry-collector` image, config
+  bind-mounted) and `traffic-generator` (spec §9.3's five required compose services). `OPENAI_API_KEY` is
+  optional here (`${OPENAI_API_KEY:-}`), unlike the base compose file - this demo is about runtime
+  telemetry, not the LLM query layer, and forcing an API key would be an unnecessary barrier to trying it.
+- **Two real, pre-existing bugs found and fixed by actually running the demo stack end-to-end** (Docker was
+  available in this session, so `docker compose -f docker-compose.demo.yml up --build` was run for real
+  rather than trusting the YAML/Dockerfile by inspection alone):
+  1. `Dockerfile` never copied `config.yaml` or `examples/` into the image - `app/main.py`'s
+     `CONFIG_PATH` defaults to the relative path `config.yaml`, resolved against the container's `WORKDIR`,
+     so the app crashed on startup with `FileNotFoundError` on *every* `docker compose up`, including the
+     pre-existing base `docker-compose.yml` - apparently never previously exercised via a real container
+     run in this project's history. Fixed by adding `COPY config.yaml ./` and `COPY examples ./examples`
+     alongside the existing `COPY app ./app`.
+  2. The OTel Collector's `otlphttp` exporter defaults to gzip-compressing its outgoing HTTP body, but
+     AIP's `/v1/traces` reads the raw request body as an uncompressed protobuf message and doesn't negotiate
+     `Content-Encoding` (spec §8's ingestion contract) - every Collector→AIP export failed with a 400 until
+     `compression: none` was added to the `otlphttp/aip` exporter's config. Confirmed fixed by watching a
+     real `200 OK` in the app's own logs and then querying `GET /api/runtime/relations?environment=demo`
+     against the live stack and seeing the generator's synthetic relations actually land in the graph.
+- `README.md` — new "Runtime telemetry (OpenTelemetry)" section: documents `/v1/traces` as the ingestion
+  boundary, states explicitly that AIP is an additional telemetry consumer, never the primary observability
+  backend (11H.16), reproduces R6/spec §10's recommended production topology (Collector fans out to both a
+  primary observability backend and AIP in parallel) and its failure-isolation principle (buffering/retry
+  belongs in Collector/deployment config, not AIP), and gives the `docker-compose.demo.yml` usage
+  instructions.
+- No new unit/integration tests - this iteration is infrastructure (Docker Compose/Collector config) and
+  documentation, not application code; its real verification was the actual end-to-end run described above,
+  not something meaningfully expressible as a `pytest` test. 352 unit / 131 integration tests unchanged and
+  still green (confirmed via a full re-run after all changes).
+- Explicitly out of scope (per spec §9.2/§10 and this repo's own non-goals list): a persistent-queue/
+  production-grade Collector configuration (spec §10 explicitly says 11H doesn't require this - it only
+  requires the *documentation* to state the principle); running the `examples/` fixtures as real, separately
+  addressable HTTP services.
+
 ## Getting started
 
 Iterations 0 and 1 need no Neo4j/Docker and can start immediately:
