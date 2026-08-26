@@ -1,7 +1,16 @@
 from datetime import datetime
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+
+class DiscoveryStatus(StrEnum):
+    """Whether a graph entity is known from declared sources or only from runtime observation
+    (spec §13). Shared across the service/operation/queue resolvers, not service-specific."""
+
+    DECLARED = "DECLARED"
+    OBSERVED_ONLY = "OBSERVED_ONLY"
 
 
 class RuntimeSpan(BaseModel):

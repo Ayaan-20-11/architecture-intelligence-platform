@@ -5,6 +5,14 @@ def test_service_id_matches_spec_example():
     assert service_id("order-service") == "service:order-service"
 
 
+def test_service_id_without_namespace():
+    assert service_id("fraud-service") == "service:fraud-service"
+
+
+def test_service_id_with_namespace():
+    assert service_id("fraud-service", namespace="commerce") == "service:commerce:fraud-service"
+
+
 def test_operation_id_matches_spec_example():
     assert (
         operation_id("product-service", "GET", "/products/{id}")

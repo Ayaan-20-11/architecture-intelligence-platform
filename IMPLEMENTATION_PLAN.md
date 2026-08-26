@@ -378,6 +378,56 @@ at-a-time approach.
   despite being FastAPI-based, since the route needs zero Neo4j/Docker and reusing `test_api.py`'s
   container-backed fixtures would add infra this route never touches.
 
+## Iteration 11B — Service & Environment Resolution (H4)
+`Architecture_Intelligence_Platform_H4_OpenTelemetry_Specification.md` §11-§14, §67. **Exit criterion:**
+a `RuntimeSpan`'s service identity can be matched against declared Services (or correctly identified as
+previously-undocumented) with a deterministic, stable id - no graph write yet. Per spec §5's pipeline
+(`OTLP Ingestion → Adapter → Observation Resolver → Observation Aggregator → Neo4j`) and §36 (only the
+Aggregator, Iteration 11E, writes to Neo4j), the Resolver is a pure/read-mostly decision-maker; §67's
+11B diagram (`Resource attributes → Service Resolver → Environment`) is the only one of the six H4
+iteration diagrams with no terminal write-shaped box, confirming this reading.
+
+- `app/canonical/ids.py::service_id` — extended to `service_id(slug, namespace=None)`, mirroring
+  `queue_id`'s existing exact shape. `service_id` was the outlier among the five ID builders in lacking
+  an optional namespace param, not a deliberate boundary - no declared-Service query anywhere selected a
+  namespace column before this, and no existing single-arg call site breaks.
+- `app/telemetry/model.py` — new `DiscoveryStatus(StrEnum)`: `DECLARED`/`OBSERVED_ONLY` (spec §13's
+  literal property values), placed in the shared telemetry model since operations (§23) and queues (§29)
+  will reference the same concept in 11C/11D - though the exact mechanism there may differ from Service's,
+  re-check those sections' own property lists rather than assuming 1:1 reuse.
+- `app/telemetry/service_resolver.py` (new) — `resolve_service(candidates, *, service_name,
+  service_namespace, aliases)`: **exact match only** (not fuzzy/normalized like `app/intent/
+  entity_resolver.py`, since OTel's `service.name`/`service.namespace` are structured attributes, not
+  free-text human phrasing). Four tiers per spec §12: (1) namespace+name exact match - only fires once
+  declared Services carry a namespace, which none do yet, kept forward-compatible without rework; (2)
+  name alone, but only if it uniquely identifies one candidate - two declared services can plausibly
+  share a display name today (adapters derive `id` from a slug but `name` from free-text document
+  metadata, and `graph/schema.py` only enforces uniqueness on `id`), so 2+ matches fall through rather
+  than guessing; (3) a configured alias; (4) observed-only - mints a deterministic id via
+  `ids.service_id(_slugify(service_name), namespace=service_namespace)`. `service.instance.id` is never
+  read anywhere in this logic, satisfying H4.3 by construction. `resolve_runtime_span(candidates, span,
+  *, aliases)` is a thin wrapper folding in `span.environment` (already decoded by 11A) - satisfying the
+  diagram's third box without a separate "environment resolver" module. `fetch_candidates(session)` is
+  the one Neo4j-touching function, a single `MATCH (s:Service) RETURN s.id, s.name, s.namespace` query.
+- `app/settings.py`/`config.yaml` — new `TelemetryConfig(service_aliases: dict[str, str] = {})`,
+  registered as `AppConfig.telemetry`. Scoped to Services only per spec §12's tier 3 - not preemptively
+  generalized to operations/queues before 11C/11D's own spec sections confirm the same mechanism applies.
+- Explicitly deferred: wiring `service_resolver.py` into `POST /v1/traces` (nothing productive to do
+  with a resolved identity until 11C/11D build real `CALLS`/`SENDS` fact candidates from it); physically
+  creating an `OBSERVED_ONLY` `(:Service)` node in Neo4j (11E's Aggregator, or whichever iteration first
+  needs a real node to attach a relation to); `EvidenceType`/`SourceType` as real `StrEnum`s (spec §15,
+  not assigned to 11B by §67's own table - `Provenance.source_type`/`evidence_type` remain plain `str`
+  fields today); extracting a shared "mint an id for tier 4" helper across future resolvers (YAGNI with
+  only one call site so far - kept internally parallel-shaped for easy extraction once 11C/11D exist).
+- 15 new tests (253 unit / 82 integration, up from 241/79): the four matching tiers plus "don't guess on
+  a name collision," alias fallback, deterministic/namespace-qualified id minting, environment folding,
+  and the spec §61-named "instance ignored" case (two spans differing only in `service_instance_id`
+  resolve to the identical `service_id`) as pure unit tests with hand-built candidates (mirroring
+  `test_entity_resolver.py`'s fixture-free style); a first H4 integration test (Testcontainers) proving
+  `fetch_candidates` reads real declared Service data correctly and an end-to-end resolution both matches
+  a known service and mints an unmatched one - with an explicit assertion that no `Service` node was
+  written to the graph, since this iteration's resolver stays read-only.
+
 ## Getting started
 
 Iterations 0 and 1 need no Neo4j/Docker and can start immediately:

@@ -1,4 +1,6 @@
-def service_id(slug: str) -> str:
+def service_id(slug: str, namespace: str | None = None) -> str:
+    if namespace:
+        return f"service:{namespace}:{slug}"
     return f"service:{slug}"
 
 

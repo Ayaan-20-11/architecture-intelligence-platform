@@ -31,12 +31,17 @@ class IntentRouterConfig(BaseModel):
     deterministic_threshold: float = 0.90
 
 
+class TelemetryConfig(BaseModel):
+    service_aliases: dict[str, str] = Field(default_factory=dict)
+
+
 class AppConfig(BaseModel):
     sources: SourcesConfig = Field(default_factory=SourcesConfig)
     graph: GraphConfig = Field(default_factory=GraphConfig)
     import_: ImportConfig = Field(default_factory=ImportConfig, alias="import")
     llm: LLMConfig = Field(default_factory=LLMConfig)
     intent_router: IntentRouterConfig = Field(default_factory=IntentRouterConfig)
+    telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
 
     model_config = {"populate_by_name": True}
 
