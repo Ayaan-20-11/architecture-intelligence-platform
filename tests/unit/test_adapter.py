@@ -375,6 +375,59 @@ def test_observed_only_entities_are_deduplicated_across_pairs():
     assert len(service_entities) == 1
 
 
+# --- observed PROVIDES relation for runtime-discovered operations (11H-D) ----------------------
+
+
+def test_observed_only_operation_produces_both_calls_and_provides_facts():
+    # FraudService has no declared operations at all - resolve_operation mints an OBSERVED_ONLY
+    # operation id (Fall B), which must now also earn its own observed PROVIDES fact.
+    client, server = _client_server_pair(service_name="FraudService")
+    batch = _correlate([client, server])
+
+    assert len(batch.facts) == 2
+    calls = next(f for f in batch.facts if f.relation_type == "CALLS")
+    provides = next(f for f in batch.facts if f.relation_type == "PROVIDES")
+
+    assert calls.subject_id == "service:order-service"
+    assert calls.object_id == "operation:service:fraudservice:GET:/products/{id}"
+
+    assert provides.subject_id == "service:fraudservice"
+    assert provides.object_id == calls.object_id
+    assert provides.evidence.evidence_type == "OBSERVED"
+    assert provides.evidence.correlation_mode == "CLIENT_SERVER"
+    assert provides.evidence.id != calls.evidence.id
+
+
+def test_declared_operation_produces_only_a_calls_fact():
+    # GET_PRODUCT is a real declared operation (Fall A) - no second PROVIDES fact should be
+    # synthesized, since one already exists from the OpenAPI import.
+    client, server = _client_server_pair()
+    batch = _correlate([client, server])
+    assert len(batch.facts) == 1
+    assert batch.facts[0].relation_type == "CALLS"
+
+
+def test_client_only_observed_only_operation_also_produces_a_provides_fact():
+    client = _span(
+        span_kind="CLIENT",
+        attributes={
+            "http.request.method": "GET",
+            "http.route": "/fraud-check",
+            "peer.service": "FraudService",
+        },
+    )
+    buffer = HttpCorrelationBuffer(ttl_seconds=60, max_pending_spans=10000)
+    _correlate([client], correlation_buffer=buffer)
+    _expire_client(buffer, client)
+
+    batch = _correlate([], correlation_buffer=buffer)
+
+    assert len(batch.facts) == 2
+    provides = next(f for f in batch.facts if f.relation_type == "PROVIDES")
+    assert provides.subject_id == "service:fraudservice"
+    assert provides.evidence.correlation_mode == "CLIENT_ONLY"
+
+
 # --- correlate_queue_observations ---------------------------------------------------------------
 
 

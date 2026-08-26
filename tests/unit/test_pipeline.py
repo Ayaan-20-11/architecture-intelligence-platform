@@ -25,7 +25,9 @@ def test_import_sources_real_examples_end_to_end():
     calls = [r for r in model.relations if r.type == "CALLS"]
     assert len(calls) == 1
     assert calls[0].source_id == ids.service_id("order-service")
-    assert calls[0].target_id == ids.operation_id("product-service", "GET", "/products/{id}")
+    assert calls[0].target_id == ids.operation_id(
+        ids.service_id("product-service"), "GET", "/products/{id}"
+    )
 
     queue_names = {q.name for q in model.queues}
     assert queue_names == {

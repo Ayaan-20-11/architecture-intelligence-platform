@@ -64,7 +64,11 @@ def parse_openapi(
             if method.lower() not in HTTP_METHODS or not isinstance(op, dict):
                 continue
 
-            operation_id_value = ids.operation_id(service_id, method, path)
+            # Full service id, not the bare slug - every other canonical id in this system is the
+            # full opaque form; this was the sole outlier, and the mismatch against
+            # operation_resolver.py's Fall-B minting (which always uses the full provider_service_id)
+            # silently broke observed<->declared operation reconciliation (11H-D/spec §8.4).
+            operation_id_value = ids.operation_id(full_service_id, method, path)
 
             request_schema_ids: list[str] = []
             request_content = ((op.get("requestBody") or {}).get("content")) or {}

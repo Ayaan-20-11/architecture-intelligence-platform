@@ -85,7 +85,9 @@ def test_declared_call_reuses_the_real_declared_operation(session):
     assert len(batch.facts) == 1
     fact = batch.facts[0]
     assert fact.subject_id == ids.service_id("order-service")
-    assert fact.object_id == ids.operation_id("product-service", "GET", "/products/{id}")
+    assert fact.object_id == ids.operation_id(
+        ids.service_id("product-service"), "GET", "/products/{id}"
+    )
     assert batch.entities == []  # both sides and the operation are all declared - nothing new
     assert batch.unresolved == []
 
@@ -108,10 +110,14 @@ def test_unknown_route_mints_observed_only_operation_against_real_service_data(s
         service_aliases={},
     )
 
-    assert len(batch.facts) == 1
-    fact = batch.facts[0]
+    # 11H-D: an OBSERVED_ONLY resolution now also earns an observed PROVIDES fact alongside CALLS.
+    assert len(batch.facts) == 2
+    fact = next(f for f in batch.facts if f.relation_type == "CALLS")
     provider_id = ids.service_id("product-service")
     assert fact.object_id == ids.operation_id(provider_id, "GET", "/internal/products/{id}")
+    provides_fact = next(f for f in batch.facts if f.relation_type == "PROVIDES")
+    assert provides_fact.subject_id == provider_id
+    assert provides_fact.object_id == fact.object_id
     operation_entities = [e for e in batch.entities if e.label == "Operation"]
     assert len(operation_entities) == 1
     assert operation_entities[0].id == fact.object_id

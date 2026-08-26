@@ -46,7 +46,7 @@ def _fact(*, environment: str = "production", **overrides) -> ObservedFactCandid
     # fixture is shared across this whole file) pass a distinct environment to stay isolated.
     subject_id = ids.service_id("order-service")
     relation_type = "CALLS"
-    object_id = ids.operation_id("product-service", "GET", "/products/{id}")
+    object_id = ids.operation_id(ids.service_id("product-service"), "GET", "/products/{id}")
     bucket_start = datetime(2026, 8, 26, tzinfo=UTC)
     bucket_end = datetime(2026, 8, 27, tzinfo=UTC)
     timestamp = overrides.pop("timestamp", datetime(2026, 8, 26, 12, 0, tzinfo=UTC))
@@ -128,7 +128,7 @@ def test_declared_node_is_never_touched_by_a_stub_merge(driver, session):
 
 def test_observed_fact_adds_evidence_alongside_the_existing_declared_evidence(driver, session):
     subject_id = ids.service_id("order-service")
-    object_id = ids.operation_id("product-service", "GET", "/products/{id}")
+    object_id = ids.operation_id(ids.service_id("product-service"), "GET", "/products/{id}")
     declared_evidence_ids = _relation_evidence_ids(session, subject_id, object_id)
     assert declared_evidence_ids, "fixture must already declare this CALLS relation with evidence"
 

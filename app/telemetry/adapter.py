@@ -89,23 +89,33 @@ def _build_call_fact(
     caller_service_id: str,
     provider_service_id: str,
     caller_service_version: str | None,
+    provider_service_version: str | None = None,
     environment: str,
     method: str,
     route: str,
     timestamp: datetime,
     trace_id: str,
     correlation_mode: str,
-) -> ObservedFactCandidate | None:
+) -> list[ObservedFactCandidate]:
     """Shared CALLS-fact core for both in-batch and cross-batch correlated observations, once both
     sides' service identity is already resolved and environment/method/route are known to be
     present - the piece of fact-construction logic (operation resolution, evidence, the fact
-    itself) that's identical regardless of how the CLIENT/SERVER pair was correlated. Returns None
-    (never guessed) if the operation can't be resolved - callers report NO_STABLE_ROUTE."""
+    itself) that's identical regardless of how the CLIENT/SERVER pair was correlated. Returns []
+    (never guessed) if the operation can't be resolved - callers report NO_STABLE_ROUTE.
+
+    When the operation resolves as OBSERVED_ONLY (runtime-discovered, no declared PROVIDES edge -
+    11H-D/spec §8), also returns a second observed PROVIDES fact (provider -> operation) alongside
+    the CALLS fact, so the provider side of a runtime-discovered operation is itself confirmable/
+    visible to blast-radius and coverage analyses, not just the caller side. Never emitted for an
+    already-DECLARED operation - it already has its PROVIDES edge from the OpenAPI import, and
+    11H-D/spec §8.4's reconciliation guarantee (a later real declaration must reuse this exact
+    operation id, not mint a duplicate node) depends on the id-normalization fix in
+    openapi_adapter.py, not on anything here."""
     operation = resolve_operation(
         operation_candidates, provider_service_id=provider_service_id, method=method, route=route
     )
     if operation.operation_id is None:
-        return None
+        return []
     _record_if_observed_only(
         entities,
         entity_id=operation.operation_id,
@@ -115,11 +125,10 @@ def _build_call_fact(
     )
 
     bucket_start, bucket_end = day_bucket(timestamp)
-    evidence_id = ids.observed_evidence_id(
-        environment, bucket_start, caller_service_id, "CALLS", operation.operation_id
-    )
-    evidence = ObservedEvidence(
-        id=evidence_id,
+    calls_evidence = ObservedEvidence(
+        id=ids.observed_evidence_id(
+            environment, bucket_start, caller_service_id, "CALLS", operation.operation_id
+        ),
         environment=environment,
         bucket_start=bucket_start,
         bucket_end=bucket_end,
@@ -130,16 +139,48 @@ def _build_call_fact(
         service_version=caller_service_version,
         correlation_mode=correlation_mode,
     )
-    return ObservedFactCandidate(
-        subject_id=caller_service_id,
-        relation_type="CALLS",
-        object_id=operation.operation_id,
-        environment=environment,
-        timestamp=timestamp,
-        trace_id=trace_id,
-        source_service_version=caller_service_version,
-        evidence=evidence,
-    )
+    facts = [
+        ObservedFactCandidate(
+            subject_id=caller_service_id,
+            relation_type="CALLS",
+            object_id=operation.operation_id,
+            environment=environment,
+            timestamp=timestamp,
+            trace_id=trace_id,
+            source_service_version=caller_service_version,
+            evidence=calls_evidence,
+        )
+    ]
+
+    if operation.discovery_status == DiscoveryStatus.OBSERVED_ONLY:
+        provides_evidence = ObservedEvidence(
+            id=ids.observed_evidence_id(
+                environment, bucket_start, provider_service_id, "PROVIDES", operation.operation_id
+            ),
+            environment=environment,
+            bucket_start=bucket_start,
+            bucket_end=bucket_end,
+            first_seen=timestamp,
+            last_seen=timestamp,
+            observation_count=1,
+            sample_trace_ids=[trace_id],
+            service_version=provider_service_version,
+            correlation_mode=correlation_mode,
+        )
+        facts.append(
+            ObservedFactCandidate(
+                subject_id=provider_service_id,
+                relation_type="PROVIDES",
+                object_id=operation.operation_id,
+                environment=environment,
+                timestamp=timestamp,
+                trace_id=trace_id,
+                source_service_version=provider_service_version,
+                evidence=provides_evidence,
+            )
+        )
+
+    return facts
 
 
 def _pending_span_from_server(server: RuntimeSpan, *, method: str, route: str) -> PendingHttpSpan:
@@ -250,12 +291,13 @@ def correlate_http_call_observations(
             )
             continue
 
-        fact = _build_call_fact(
+        new_facts = _build_call_fact(
             operation_candidates=operation_candidates,
             entities=entities,
             caller_service_id=caller.service_id,
             provider_service_id=provider.service_id,
             caller_service_version=client.service_version,
+            provider_service_version=server.service_version,
             environment=server.environment,
             method=method,
             route=route,
@@ -263,12 +305,12 @@ def correlate_http_call_observations(
             trace_id=server.trace_id,
             correlation_mode="CLIENT_SERVER",
         )
-        if fact is None:
+        if not new_facts:
             unresolved.append(
                 UnresolvedObservation(trace_id=server.trace_id, reason=NO_STABLE_ROUTE)
             )
             continue
-        facts.append(fact)
+        facts.extend(new_facts)
 
     if correlation_buffer is not None:
         # Drain whatever aged out of the buffer since it was last touched, independent of this
@@ -327,7 +369,7 @@ def correlate_http_call_observations(
                 name=expired_client.target_identity,
             )
 
-            fact = _build_call_fact(
+            new_facts = _build_call_fact(
                 operation_candidates=operation_candidates,
                 entities=entities,
                 caller_service_id=caller.service_id,
@@ -340,12 +382,12 @@ def correlate_http_call_observations(
                 trace_id=expired_client.trace_id,
                 correlation_mode="CLIENT_ONLY",
             )
-            if fact is None:
+            if not new_facts:
                 unresolved.append(
                     UnresolvedObservation(trace_id=expired_client.trace_id, reason=NO_STABLE_ROUTE)
                 )
                 continue
-            facts.append(fact)
+            facts.extend(new_facts)
 
         for expired_server in expired_servers:
             # Every SERVER PendingHttpSpan the buffer stores was already validated (environment,
@@ -416,21 +458,22 @@ def correlate_http_call_observations(
                 name=matched_client.service_name,
             )
 
-            fact = _build_call_fact(
-                operation_candidates=operation_candidates,
-                entities=entities,
-                caller_service_id=caller.service_id,
-                provider_service_id=provider.service_id,
-                caller_service_version=matched_client.service_version,
-                environment=server.environment,
-                method=method,
-                route=route,
-                timestamp=server.end_time,
-                trace_id=server.trace_id,
-                correlation_mode="CLIENT_SERVER",
+            facts.extend(
+                _build_call_fact(
+                    operation_candidates=operation_candidates,
+                    entities=entities,
+                    caller_service_id=caller.service_id,
+                    provider_service_id=provider.service_id,
+                    caller_service_version=matched_client.service_version,
+                    provider_service_version=server.service_version,
+                    environment=server.environment,
+                    method=method,
+                    route=route,
+                    timestamp=server.end_time,
+                    trace_id=server.trace_id,
+                    correlation_mode="CLIENT_SERVER",
+                )
             )
-            if fact is not None:
-                facts.append(fact)
 
         for client in leftover_clients:
             caller = resolve_runtime_span(service_candidates, client, aliases=service_aliases)
@@ -464,21 +507,22 @@ def correlate_http_call_observations(
                 name=matched_server.service_name,
             )
 
-            fact = _build_call_fact(
-                operation_candidates=operation_candidates,
-                entities=entities,
-                caller_service_id=caller.service_id,
-                provider_service_id=provider.service_id,
-                caller_service_version=client.service_version,
-                environment=matched_server.environment,
-                method=matched_server.method,
-                route=matched_server.route,
-                timestamp=matched_server.timestamp,
-                trace_id=matched_server.trace_id,
-                correlation_mode="CLIENT_SERVER",
+            facts.extend(
+                _build_call_fact(
+                    operation_candidates=operation_candidates,
+                    entities=entities,
+                    caller_service_id=caller.service_id,
+                    provider_service_id=provider.service_id,
+                    caller_service_version=client.service_version,
+                    provider_service_version=matched_server.service_version,
+                    environment=matched_server.environment,
+                    method=matched_server.method,
+                    route=matched_server.route,
+                    timestamp=matched_server.timestamp,
+                    trace_id=matched_server.trace_id,
+                    correlation_mode="CLIENT_SERVER",
+                )
             )
-            if fact is not None:
-                facts.append(fact)
 
     return ObservationBatch(entities=list(entities.values()), facts=facts, unresolved=unresolved)
 

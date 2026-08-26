@@ -527,7 +527,7 @@ def test_import_all_sources_real_examples_end_to_end(driver):
         record = session.run(
             "MATCH (s:Service {id: 'service:order-service'})-[:CALLS]->(o:Operation) RETURN o.id AS id"
         ).single()
-    assert record["id"] == "operation:product-service:GET:/products/{id}"
+    assert record["id"] == "operation:service:product-service:GET:/products/{id}"
 
     assert _count(driver, "MATCH ()-[r:DEAD_LETTERS_TO]->() RETURN count(r) AS c") == 1
     assert _count(driver, "MATCH (q:Queue) RETURN count(q) AS c") == 5

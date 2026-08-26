@@ -55,7 +55,9 @@ def test_parses_operation_matching_spec_example():
         source_file="examples/product-service/openapi.yaml",
     )
     [operation] = model.operations
-    assert operation.id == ids.operation_id("product-service", "GET", "/products/{id}")
+    assert operation.id == ids.operation_id(
+        ids.service_id("product-service"), "GET", "/products/{id}"
+    )
     assert operation.operation_id == "getProduct"
     assert operation.method == "GET"
     assert operation.path == "/products/{id}"
@@ -72,7 +74,9 @@ def test_provides_relation_created():
     provides = [r for r in model.relations if r.type == "PROVIDES"]
     assert len(provides) == 1
     assert provides[0].source_id == ids.service_id("product-service")
-    assert provides[0].target_id == ids.operation_id("product-service", "GET", "/products/{id}")
+    assert provides[0].target_id == ids.operation_id(
+        ids.service_id("product-service"), "GET", "/products/{id}"
+    )
 
 
 def test_response_schema_relation_and_canonical_hash():

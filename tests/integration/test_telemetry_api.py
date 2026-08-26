@@ -10,7 +10,8 @@ from opentelemetry.proto.trace.v1.trace_pb2 import ResourceSpans, ScopeSpans, Sp
 from testcontainers.community.neo4j import Neo4jContainer
 
 from app.canonical import ids
-from app.graph.importer import import_all_sources
+from app.graph.importer import import_all_sources, import_service
+from app.ingestion.openapi_adapter import load_openapi_document, parse_openapi
 from app.main import create_app
 from app.settings import AppConfig, Secrets, Settings
 from app.telemetry.correlation_buffer import HttpCorrelationBuffer
@@ -132,7 +133,7 @@ def test_valid_payload_persists_an_observed_call_and_returns_200(client, session
     assert response.headers["content-type"] == _CONTENT_TYPE
 
     subject_id = ids.service_id("order-service")
-    object_id = ids.operation_id("product-service", "GET", "/products/{id}")
+    object_id = ids.operation_id(ids.service_id("product-service"), "GET", "/products/{id}")
     record = session.run(
         "MATCH (a {id: $subject_id})-[r:CALLS]->(b {id: $object_id}) RETURN r.evidence_ids AS ids",
         subject_id=subject_id,
@@ -280,3 +281,97 @@ def test_client_only_observation_produces_a_calls_relation_after_ttl_expiry(
         id=record["ids"][-1],
     ).single()
     assert evidence["correlation_mode"] == "CLIENT_ONLY"
+
+
+# --- 11H-D: observed PROVIDES relation for runtime-discovered operations ------------------------
+
+
+def test_undeclared_route_on_a_known_provider_gets_an_observed_provides_relation(client, session):
+    # I4: ProductService is a real declared service, but /internal/products/{id} is not a
+    # declared route - the runtime-minted Operation must carry OBSERVED_ONLY discovery_status
+    # and an observed PROVIDES edge from ProductService, not just the CALLS edge to it.
+    payload = _resource_spans(
+        client_service="OrderService",
+        server_service="ProductService",
+        method="GET",
+        route="/internal/products/{id}",
+    )
+    response = client.post("/v1/traces", content=payload, headers={"content-type": _CONTENT_TYPE})
+    assert response.status_code == 200
+
+    provider_id = ids.service_id("product-service")
+    operation_id = ids.operation_id(provider_id, "GET", "/internal/products/{id}")
+
+    operation_record = session.run(
+        "MATCH (o:Operation {id: $id}) RETURN o.discovery_status AS discovery_status",
+        id=operation_id,
+    ).single()
+    assert operation_record is not None
+    assert operation_record["discovery_status"] == "OBSERVED_ONLY"
+
+    provides_record = session.run(
+        "MATCH (s:Service {id: $provider_id})-[r:PROVIDES]->(o:Operation {id: $operation_id}) "
+        "RETURN r.evidence_ids AS evidence_ids",
+        provider_id=provider_id,
+        operation_id=operation_id,
+    ).single()
+    assert provides_record is not None
+    assert len(provides_record["evidence_ids"]) == 1
+
+    evidence = session.run(
+        "MATCH (e:Evidence {id: $id}) RETURN e.source_type AS source_type, "
+        "e.evidence_type AS evidence_type",
+        id=provides_record["evidence_ids"][0],
+    ).single()
+    assert evidence["source_type"] == "OPENTELEMETRY"
+    assert evidence["evidence_type"] == "OBSERVED"
+
+
+def test_later_declaring_an_observed_only_operation_reconciles_without_duplication(
+    client, session, driver
+):
+    # I5: run the same undeclared-route observation as I4, then import a real OpenAPI document
+    # that declares that exact method+path for the same service. Reconciliation must land on the
+    # SAME Operation node (11H-D/spec §8.4) - this is exactly the id-normalization fix's target:
+    # without it, the declared import would mint a second, disconnected node.
+    payload = _resource_spans(
+        client_service="OrderService",
+        server_service="ProductService",
+        method="GET",
+        route="/internal/products2/{id}",
+    )
+    response = client.post("/v1/traces", content=payload, headers={"content-type": _CONTENT_TYPE})
+    assert response.status_code == 200
+
+    provider_id = ids.service_id("product-service")
+    operation_id = ids.operation_id(provider_id, "GET", "/internal/products2/{id}")
+
+    document = load_openapi_document(EXAMPLES_DIR / "product-service" / "openapi.yaml")
+    document["paths"]["/internal/products2/{id}"] = {
+        "get": {
+            "operationId": "getInternalProduct2",
+            "responses": {"200": {"content": {"application/json": {"schema": {}}}}},
+        }
+    }
+    model = parse_openapi(
+        document,
+        service_id="product-service",
+        source_file="examples/product-service/openapi.yaml",
+    )
+    with driver.session(database=DATABASE) as write_session:
+        import_service(write_session, "product-service", model)
+
+    count = session.run(
+        "MATCH (o:Operation {id: $id}) RETURN count(o) AS c", id=operation_id
+    ).single()["c"]
+    assert count == 1
+
+    evidence_types = session.run(
+        "MATCH (s:Service {id: $provider_id})-[r:PROVIDES]->(o:Operation {id: $operation_id}) "
+        "UNWIND r.evidence_ids AS eid "
+        "MATCH (e:Evidence {id: eid}) "
+        "RETURN collect(DISTINCT e.evidence_type) AS types",
+        provider_id=provider_id,
+        operation_id=operation_id,
+    ).single()["types"]
+    assert set(evidence_types) == {"DECLARED", "OBSERVED"}

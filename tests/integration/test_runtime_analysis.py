@@ -155,7 +155,7 @@ def test_o1_filters_by_relation_type_and_from_id(driver, session):
 
 def test_o2_finds_the_real_declared_relation_once_observed_too(driver, session):
     subject_id = ids.service_id("order-service")
-    operation_id = ids.operation_id("product-service", "GET", "/products/{id}")
+    operation_id = ids.operation_id(ids.service_id("product-service"), "GET", "/products/{id}")
     provider_id = ids.service_id("product-service")
     _persist(
         driver,
@@ -279,7 +279,7 @@ def test_o5_reports_http_observed_for_a_caller(driver, session):
         _fact(
             subject_id=subject_id,
             relation_type="CALLS",
-            object_id=ids.operation_id("product-service", "GET", "/products/{id}"),
+            object_id=ids.operation_id(ids.service_id("product-service"), "GET", "/products/{id}"),
             environment="o5-env",
         ),
     )
@@ -355,7 +355,9 @@ def test_service_runtime_profile_combines_confirmed_observed_only_and_declared_o
     driver, session
 ):
     order_id = ids.service_id("order-service")
-    product_operation_id = ids.operation_id("product-service", "GET", "/products/{id}")
+    product_operation_id = ids.operation_id(
+        ids.service_id("product-service"), "GET", "/products/{id}"
+    )
     product_service_id = ids.service_id("product-service")
     legacy_operation_id = ids.operation_id(product_service_id, "GET", "/legacy/pricing")
 

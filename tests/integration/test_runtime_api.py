@@ -69,7 +69,9 @@ def populated_graph(driver):
     import_all_sources(driver, database=DATABASE, root=EXAMPLES_DIR)
 
     order_id = ids.service_id("order-service")
-    product_operation_id = ids.operation_id("product-service", "GET", "/products/{id}")
+    product_operation_id = ids.operation_id(
+        ids.service_id("product-service"), "GET", "/products/{id}"
+    )
     legacy_provider_id = ids.service_id("legacy-pricing-service")
     legacy_operation_id = ids.operation_id(legacy_provider_id, "GET", "/pricing")
 
@@ -121,7 +123,9 @@ def _ids():
     return {
         "order": ids.service_id("order-service"),
         "product": ids.service_id("product-service"),
-        "product_operation": ids.operation_id("product-service", "GET", "/products/{id}"),
+        "product_operation": ids.operation_id(
+            ids.service_id("product-service"), "GET", "/products/{id}"
+        ),
         "legacy_operation": ids.operation_id(
             ids.service_id("legacy-pricing-service"), "GET", "/pricing"
         ),

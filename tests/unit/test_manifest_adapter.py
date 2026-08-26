@@ -80,4 +80,6 @@ def test_real_manifest_fixture_resolves_against_real_openapi_fixture():
     [relation] = model.relations
     assert relation.type == "CALLS"
     assert relation.source_id == ids.service_id("order-service")
-    assert relation.target_id == ids.operation_id("product-service", "GET", "/products/{id}")
+    assert relation.target_id == ids.operation_id(
+        ids.service_id("product-service"), "GET", "/products/{id}"
+    )

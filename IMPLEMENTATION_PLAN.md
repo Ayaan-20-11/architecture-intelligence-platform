@@ -956,6 +956,71 @@ arriving; a SERVER span alone never invents a caller; ambiguous/incomplete cases
   `deployment.environment.name` entirely) was caught the same way, by reading the resulting
   `NO_ENVIRONMENT` unresolved reason rather than assuming the feature itself was broken.
 
+## Iteration 11H-D — Observed Provider Relation for Runtime-Discovered Operations (Runtime Correctness & Robustness)
+`Architecture_Intelligence_Platform_11H_Runtime_Correctness_Robustness_Specification.md` R4/§8, acceptance
+criteria 11H.9/11H.10. **Exit criterion:** a runtime-discovered, stable provider operation (resolved
+`OBSERVED_ONLY`, spec §22/§23 Fall B) receives its own observed `PROVIDES` relation, not just the `CALLS`
+edge pointing at it; a later real OpenAPI declaration of that same method+path for that same service
+reconciles onto the *same* Operation node, never a duplicate. Fourth of six 11H sub-iterations; 11H-A
+(`12a7a0d`), 11H-B (`e2da3ef`), 11H-C (`d9c513a`) are already committed.
+
+- **A real, pre-existing correctness bug surfaced and fixed first, as a required prerequisite**: declared
+  operation ids were minted from the *bare service slug* (`app/ingestion/openapi_adapter.py`'s
+  `ids.operation_id(service_id, method, path)`, using the raw `"product-service"` parameter) while
+  `operation_resolver.py`'s Fall-B minting always used the *full* canonical service id
+  (`ids.operation_id(provider_service_id, ...)`, e.g. `"service:product-service"`) — every other canonical
+  id in the system uses the full opaque form, this was the sole outlier. Left unfixed, a runtime-discovered
+  operation and a later-declared version of the exact same logical operation would land on two different
+  Neo4j nodes, silently breaking reconciliation — exactly what 11H.10 exists to guarantee against. Fixed at
+  the root in `openapi_adapter.py` (mint from `full_service_id`), not by special-casing
+  `operation_resolver.py`'s already-correct Fall B. Required updating every test asserting a *real*
+  `parse_openapi()`/pipeline/Neo4j-imported operation id (`test_openapi_adapter.py`, `test_pipeline.py`,
+  `test_manifest_adapter.py`'s real-fixture test, `test_importer.py`'s end-to-end test, `test_adapter.py`,
+  `test_runtime_api.py`, `test_aggregator.py`, `test_telemetry_api.py`, `test_runtime_analysis.py` — roughly
+  15 real call sites across 9 files); left untouched every test using a fully synthetic, internally
+  self-consistent id/candidate fixture (confirmed file-by-file, not assumed), since those never depended on
+  the real minting convention in the first place.
+- `app/telemetry/adapter.py::_build_call_fact` now returns `list[ObservedFactCandidate]` instead of
+  `ObservedFactCandidate | None` (empty list when the operation can't be resolved, same as before). When
+  the resolved operation's `discovery_status == OBSERVED_ONLY`, it also builds and returns a second
+  `PROVIDES` fact (`provider_service_id -> operation_id`) alongside the `CALLS` fact, with its own
+  deterministic `observed_evidence_id(..., "PROVIDES", ...)` and `correlation_mode` copied from whichever
+  mode produced the call (`CLIENT_SERVER`/`CLIENT_ONLY`). Never emitted for an already-`DECLARED` operation
+  — it already has a real `PROVIDES` edge from the OpenAPI import; a redundant observed one would be pure
+  noise. All four call sites (in-batch pairs, cross-batch CLIENT_ONLY, cross-batch leftover-servers,
+  cross-batch leftover-clients) updated to `facts.extend(...)` the returned list; gained an optional
+  `provider_service_version` parameter, threaded from the SERVER/`PendingHttpSpan` side wherever available
+  (unavailable for CLIENT_ONLY, which has no SERVER-side span at all — left `None` there, an already-
+  optional field).
+- **A second, previously-latent bug this feature's own change exposed, found via a real integration-test
+  failure rather than assumed**: `operation_resolver.py`'s `_CANDIDATES_QUERY` (`MATCH
+  (s:Service)-[:PROVIDES]->(o:Operation)`) never needed to handle an `OBSERVED_ONLY` operation before, since
+  such an operation never had a `PROVIDES` edge at all prior to this iteration. Once it does, the query
+  starts returning candidates whose `method`/`path` properties are `null` (an `OBSERVED_ONLY` Operation node
+  is only ever `MERGE`d via the stub-entity path — id/name/discovery_status — never given real method/path
+  properties), and `resolve_operation`'s Fall-A comparison loop crashed on `candidate.method.upper()`. Fixed
+  by adding `WHERE o.method IS NOT NULL AND o.path IS NOT NULL` to `_CANDIDATES_QUERY`, correctly scoping
+  Fall-A matching to genuinely declared operations only — exactly what it always implicitly was before
+  `OBSERVED_ONLY` operations could reach this query.
+- 3 new unit tests (345, up from 342): an `OBSERVED_ONLY` in-batch pair produces both `CALLS` and
+  `PROVIDES` facts with distinct evidence ids and matching `correlation_mode`; a `DECLARED` (Fall A) pair
+  still produces only `CALLS`; a `CLIENT_ONLY`-resolved `OBSERVED_ONLY` operation also produces the second
+  `PROVIDES` fact. One existing integration test (`test_adapter.py::test_unknown_route_mints_observed_...`)
+  updated from asserting exactly one fact to asserting two, since its scenario is itself an `OBSERVED_ONLY`
+  resolution.
+- 2 new integration tests (127, up from 125): **I4** (`test_telemetry_api.py`) — a real `POST /v1/traces`
+  CLIENT/SERVER pair for an undeclared route on a real declared provider (`ProductService`) persists an
+  `Operation` node with `discovery_status = OBSERVED_ONLY` *and* a `PROVIDES` edge from the provider
+  `Service`, backed by `OBSERVED` evidence. **I5** — runs the same scenario, then imports a real OpenAPI
+  document declaring that exact method+path for the same service via `import_service()`; asserts exactly
+  one `Operation` node exists (not two) and its `PROVIDES` edge now carries both `DECLARED` and `OBSERVED`
+  evidence types — the test the id-normalization fix exists to make pass for the right reason, not silently
+  pass-by-coincidence or fail.
+- Explicitly deferred (unchanged from the original roadmap): SERVER_ONLY's own one-sided `PROVIDES`
+  emission (11H-C left this for "when 11H-D lands" — SERVER_ONLY still never identifies a caller at all per
+  spec §7.3, so there is no `CALLS`-fact code path to attach a `PROVIDES` fact to the way this iteration's
+  mechanism assumes; revisit only if a future iteration gives SERVER_ONLY its own fact-emission path).
+
 ## Getting started
 
 Iterations 0 and 1 need no Neo4j/Docker and can start immediately:

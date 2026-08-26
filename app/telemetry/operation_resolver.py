@@ -7,6 +7,13 @@ from app.telemetry.model import DiscoveryStatus
 
 _CANDIDATES_QUERY = (
     "MATCH (s:Service)-[:PROVIDES]->(o:Operation) "
+    # 11H-D: an OBSERVED_ONLY operation now also gets a PROVIDES edge (its provider is
+    # observed-confirmable), but its Operation node is only ever MERGEd via the stub-entity path
+    # (id/name/discovery_status), never carrying real method/path properties - only a genuinely
+    # DECLARED operation (written by the OpenAPI adapter's node import) has both set. Excluding
+    # null-method/path candidates here keeps Fall-A matching scoped to real declared operations,
+    # as it always implicitly was before OBSERVED_ONLY operations could reach this query at all.
+    "WHERE o.method IS NOT NULL AND o.path IS NOT NULL "
     "RETURN s.id AS provider_service_id, o.id AS id, o.method AS method, o.path AS path"
 )
 
