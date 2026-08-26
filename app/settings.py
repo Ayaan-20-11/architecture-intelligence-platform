@@ -33,6 +33,7 @@ class IntentRouterConfig(BaseModel):
 
 class TelemetryConfig(BaseModel):
     service_aliases: dict[str, str] = Field(default_factory=dict)
+    queue_aliases: dict[str, str] = Field(default_factory=dict)
 
 
 class AppConfig(BaseModel):

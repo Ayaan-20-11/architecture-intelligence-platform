@@ -548,6 +548,67 @@ both HTTP and queue correlation exist. **No Neo4j writes** - consistent with 11A
   observed-only queue against real service data (H4.10), both with explicit "nothing written to Neo4j"
   assertions, plus a `fetch_queue_candidates` real-data check.
 
+## Iteration 11E — Evidence Aggregation (H4)
+`Architecture_Intelligence_Platform_H4_OpenTelemetry_Specification.md` §17-19, §36-40, §54, §61-62, §67.
+**Exit criterion:** `ObservedFactCandidate`s are merged into real Neo4j Evidence nodes/relations with
+correct bucket semantics (spec §36: normalize fact → determine bucket → find/merge relation → add
+OBSERVED evidence → update counters/first-last-seen → cap trace samples). **This is the first H4
+iteration that writes to Neo4j** — 11A-11D built a fully read-only pipeline.
+
+- **Scope reversal, recorded deliberately**: this iteration also wires `POST /v1/traces` all the way
+  through to persistence (decode → fetch declared candidates → `adapt()` → `persist_observation_batch()`),
+  rather than deferring once more as every prior H4 iteration did. Reasons: spec §62's own Integration
+  Tests section names the target path explicitly ("OTLP batch → `/v1/traces` → Observed Fact → Neo4j");
+  §9's pipeline diagram terminates in Neo4j as the steady-state architecture; `app/api/telemetry.py`'s
+  own docstring was a live "not yet, next iteration" pointer; the plumbing cost was low (`app/deps.py`
+  already had the exact `Depends(get_driver)` idiom to reuse); and 11G's theme ("Runtime API + Service
+  Explorer + O1-O5 intents") is about the *read* side, with no natural home for finishing the write path.
+- `app/graph/schema.py` — added the missing `Evidence.id` uniqueness constraint (every other node label
+  had one; `Evidence` was a real gap even before H4).
+- `app/telemetry/aggregator.py` (new) — `merge_evidence(existing: ObservedEvidence | None, seed) ->
+  ObservedEvidence`, a **pure** bucket-merge function (mirrors the pure-function/thin-I/O-wrapper split
+  already established across the three resolvers): widens `first_seen`/`last_seen`, sums
+  `observation_count`, dedup-caps `sample_trace_ids` at 5; `bucket_start`/`bucket_end` come from the seed
+  unchanged (same-day by construction, since `observed_evidence_id()` is deterministic per (fact, day,
+  environment)). Caught and fixed a real, non-obvious bug before it shipped: Neo4j returns temporal
+  properties as `neo4j.time.DateTime`, not `datetime.datetime` — Pydantic v2 rejects it outright, so
+  reading an existing Evidence node back requires an explicit `.to_native()` conversion (write-direction
+  needs none). Entity stubs use `MERGE ... ON CREATE SET` only (never touches an existing DECLARED node's
+  real properties); facts are persisted **sequentially inside one transaction**, not a bulk `UNWIND` —
+  this is what correctly handles the same fact appearing more than once within one OTLP batch, since each
+  read sees the previous iteration's already-written merge. The relation-evidence accumulation mirrors
+  (does not call) `importer.py`'s existing dedup-append `reduce()` expression, deliberately never touching
+  `r.sources` (declared-import-only reconciliation bookkeeping that must not apply to incremental runtime
+  observation, per spec §40's "absence of observation ≠ evidence of absence").
+- `app/settings.py::TelemetryConfig` gained `queue_aliases` (only `service_aliases` existed since 11B) —
+  completes the config surface `correlate_queue_observations` already needed as a parameter.
+- `app/api/telemetry.py` — `POST /v1/traces` gained `Depends(get_driver)`/`Depends(get_settings)`.
+  Content-type/decode validation still happens first in the route body, but this does **not** avoid the
+  new dependencies at the FastAPI level — `Depends()` params are resolved before the route body runs
+  regardless of where an early exception is raised, so both existing 415/400 unit tests needed
+  `app.state.driver`/`settings` stubbed (to *something*, even `None`/a bare default `Settings()`, since
+  those code paths never actually use them) to keep passing without Docker.
+- Explicitly deferred and documented as a known, not-fixed risk: `importer.py::_EXPIRE_RELATIONS_QUERY`
+  unconditionally deletes a relation once a declared reimport empties its `sources`, regardless of
+  whether it also carries OBSERVED `evidence_ids` — after 11E, a `CONFIRMED` relation losing its declared
+  side could have its accumulated observed evidence silently discarded too. A correct fix needs to check
+  evidence *type*, not just presence, with an ordering-sensitive interaction with stale-evidence-stripping
+  not fully verified within this iteration's scope — left for a dedicated follow-up (11F, when this would
+  first become visible) rather than risking a regression in well-tested H1 code.
+- Also explicitly deferred: any Runtime API surface for reading the new Evidence properties (11G);
+  O1-O5 comparison analyses and the derived `CONFIRMED`/`OBSERVED_ONLY`/`DECLARED_ONLY` status (spec §38:
+  status is derived at query time, not stored — confirmed as 11F's job, not 11E's); retention/cleanup
+  (spec §59-60, not assigned to any of H4's seven named sub-iterations).
+- 14 new tests (303 unit / 93 integration, up from 295/87 minus one moved): `merge_evidence`'s widening/
+  summing/capping/preservation behavior as pure unit tests; Testcontainers tests proving a stub node is
+  `ON CREATE`-only (idempotent, never clobbers a declared node), a fact adds observed evidence *alongside*
+  a relation's pre-existing declared evidence (direct proof of spec §37/§38's "evidence decides status"
+  model), and persisting the same fact twice correctly merges the bucket (the test that actually exercises
+  the `.to_native()` fix, since it's the only path reading back a previously-written Evidence node); the
+  `/v1/traces` happy-path test (moved from unit to `tests/integration/test_telemetry_api.py`, since a
+  valid payload now requires real Neo4j) proving the full spec §62 path end-to-end — a real OTLP payload
+  results in a queryable `CALLS` relation with an `OPENTELEMETRY`/`OBSERVED` Evidence node attached.
+
 ## Getting started
 
 Iterations 0 and 1 need no Neo4j/Docker and can start immediately:

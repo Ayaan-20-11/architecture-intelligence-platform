@@ -20,3 +20,4 @@ architecture_intelligence:
     deterministic_threshold: 0.9
   telemetry:
     service_aliases: {}
+    queue_aliases: {}
