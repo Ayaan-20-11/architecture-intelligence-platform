@@ -49,10 +49,43 @@ _BLAST_RADIUS_RE = _compile(
     r"(?P<entity>.+?)(?:\s+ab)?\??$"
 )
 
+
+# O1-O5 (spec §51/§52) answer "what happened at runtime", scoped by a configured default
+# environment/window rather than any entity mentioned in the question (see
+# app/analysis/registry.py::execute()'s since/environment kwargs) - none of these five need an
+# entity_label. Ordered most-specific-keyword-combination first (O3/O4/O5, each pairs two distinct
+# concepts) before the single-concept O2/O1 patterns, since "observed"/"beobachtet" appears in all
+# five and a looser pattern earlier in the list would shadow a more specific one later.
+_O3_OBSERVED_ONLY_RE = _compile(
+    r"(?:undocumented|undokumentiert\w*).*(?:observ\w*|beobacht\w*)|"
+    r"(?:observ\w*|beobacht\w*).*(?:undocumented|undokumentiert\w*)"
+)
+_O4_DECLARED_ONLY_RE = _compile(
+    r"(?:declared|deklariert\w*).*(?:not\s+observed|nicht\s+beobachtet)|"
+    r"(?:not\s+observed|nicht\s+beobachtet).*(?:declared|deklariert\w*)"
+)
+_O5_TELEMETRY_COVERAGE_RE = _compile(
+    r"no\s+telemetry|keine\s+telemetrie|telemetry\s+coverage|telemetrie[- ]?abdeckung"
+)
+_O2_CONFIRMED_RE = _compile(
+    r"confirmed\b|best(?:ä|ae)tigt\w*|"
+    r"(?:declared\s+and\s+observed|documented\s+and\s+observed|dokumentiert\w*.*beobacht\w*)"
+)
+_O1_OBSERVED_RE = _compile(
+    r"(?:architecture\s+)?relationships?.*(?:actually\s+)?observ\w*|"
+    r"observ\w*.*(?:architecture\s+)?relationships?|"
+    r"architekturbeziehungen.*beobacht\w*|was\s+wurde\s+(?:tats(?:ä|ae)chlich\s+)?beobachtet"
+)
+
 PATTERNS: list[IntentPattern] = [
     IntentPattern(ArchitectureIntent.QUEUES_WITHOUT_SENDERS, _NO_SENDER_RE, None),
     IntentPattern(ArchitectureIntent.QUEUES_WITHOUT_CONSUMERS, _NO_CONSUMER_RE, None),
     IntentPattern(ArchitectureIntent.QUEUE_SENDERS, _QUEUE_SENDERS_RE, "Queue"),
     IntentPattern(ArchitectureIntent.QUEUE_CONSUMERS, _QUEUE_CONSUMERS_RE, "Queue"),
     IntentPattern(ArchitectureIntent.BLAST_RADIUS, _BLAST_RADIUS_RE, "Service"),
+    IntentPattern(ArchitectureIntent.OBSERVED_ONLY_RELATIONS, _O3_OBSERVED_ONLY_RE, None),
+    IntentPattern(ArchitectureIntent.DECLARED_ONLY_RELATIONS, _O4_DECLARED_ONLY_RE, None),
+    IntentPattern(ArchitectureIntent.TELEMETRY_COVERAGE, _O5_TELEMETRY_COVERAGE_RE, None),
+    IntentPattern(ArchitectureIntent.CONFIRMED_RELATIONS, _O2_CONFIRMED_RE, None),
+    IntentPattern(ArchitectureIntent.OBSERVED_RELATIONS, _O1_OBSERVED_RE, None),
 ]

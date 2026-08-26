@@ -5,6 +5,7 @@ import neo4j
 
 from app.ai.question_service import ArchitectureQuestionService
 from app.analysis import registry
+from app.analysis.runtime import DEFAULT_ENVIRONMENT, DEFAULT_WINDOW_HOURS, default_since
 from app.intent.entity_resolver import fetch_candidates
 from app.intent.model import ArchitectureIntent
 from app.intent.router import classify
@@ -31,11 +32,15 @@ def answer_question(
     question: str,
     deterministic_threshold: float,
     question_service: ArchitectureQuestionService | None,
+    default_window_hours: int = DEFAULT_WINDOW_HOURS,
+    default_environment: str = DEFAULT_ENVIRONMENT,
 ) -> RoutedAnswer:
     """Entry point for both the JSON API and the UI query page (spec §6.3/§9): known-intent
     questions are answered by an existing tested analysis, bypassing LLM Cypher generation
     entirely (AC-H3-3); only UNKNOWN questions fall back to the (H1/H2-hardened) LLM path, which
-    stays untouched by this module."""
+    stays untouched by this module. default_window_hours/default_environment feed the O1-O5
+    handlers (spec §51 Decision 2: always defaulted, never parsed from question text) - unused by
+    A1-A5, which don't need them."""
     candidates = {
         "Service": fetch_candidates(session, "Service"),
         "Queue": fetch_candidates(session, "Queue"),
@@ -43,7 +48,13 @@ def answer_question(
     intent_result = classify(question, candidates=candidates, threshold=deterministic_threshold)
 
     if intent_result.intent is not ArchitectureIntent.UNKNOWN:
-        rows = registry.execute(session, intent_result.intent, intent_result.parameters)
+        rows = registry.execute(
+            session,
+            intent_result.intent,
+            intent_result.parameters,
+            since=default_since(default_window_hours),
+            environment=default_environment,
+        )
         return RoutedAnswer(
             question=question,
             execution_mode="DETERMINISTIC",

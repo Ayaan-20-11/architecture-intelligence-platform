@@ -5,6 +5,7 @@ import neo4j
 
 NOT_OBSERVED_IN_WINDOW = "NOT_OBSERVED_IN_WINDOW"
 DEFAULT_WINDOW_HOURS = 24
+DEFAULT_ENVIRONMENT = "production"
 
 # Shared building blocks for the CALLS branch used by O1-O4: CALLS always goes
 # (Service)-[r]->(Operation), never Service->Service, and PROVIDES is only ever written by the
@@ -320,3 +321,122 @@ def telemetry_coverage(
             )
         )
     return results
+
+
+@dataclass(frozen=True)
+class RuntimeRelationStatus:
+    """One outgoing relation from a profiled service, labeled with its O2/O3/O4 status (used by
+    service_runtime_profile - the Runtime API's per-service endpoint and the Service Explorer UI's
+    Observed section, spec §49/§50)."""
+
+    relation_type: str
+    target_id: str
+    target_name: str
+    status: str  # "CONFIRMED" | "OBSERVED_ONLY" | NOT_OBSERVED_IN_WINDOW
+    first_seen: datetime | None
+    last_seen: datetime | None
+    observation_count: int | None
+    telemetry_coverage_available: bool | None  # only meaningful for NOT_OBSERVED_IN_WINDOW rows
+
+
+@dataclass(frozen=True)
+class ServiceRuntimeProfile:
+    service_id: str
+    service_name: str
+    environment: str
+    since: datetime
+    coverage: ServiceTelemetryCoverage
+    relations: list[RuntimeRelationStatus]
+
+
+_SERVICE_NAME_QUERY = "MATCH (s:Service {id: $id}) RETURN s.name AS name"
+
+
+def service_runtime_profile(
+    session: neo4j.Session,
+    *,
+    service_id: str,
+    environment: str,
+    since: datetime,
+    until: datetime | None = None,
+) -> ServiceRuntimeProfile | None:
+    """Per-service runtime view: this service's outgoing CONFIRMED + OBSERVED_ONLY + DECLARED_ONLY
+    relations plus its O5 coverage (spec §49's sketch shows only outgoing declared/observed
+    relations from the profiled service's own perspective - matches the existing declared
+    Provides/Calls asymmetry already in service.html). Composes O2+O3+O4+O5 rather than adding a
+    from_id filter to those four tested functions - filters their full-graph results down to
+    source_id == service_id in Python, deliberately not touching their signatures/tests, cheap at
+    this PoC's scale (same "simple over clever" call O5 itself already makes). Returns None if the
+    service doesn't exist - callers decide the 404."""
+    name_row = session.run(_SERVICE_NAME_QUERY, id=service_id).single()
+    if name_row is None:
+        return None
+
+    confirmed = [
+        r
+        for r in confirmed_relations(session, environment=environment, since=since, until=until)
+        if r.source_id == service_id
+    ]
+    observed_only = [
+        r
+        for r in observed_only_relations(session, environment=environment, since=since, until=until)
+        if r.source_id == service_id
+    ]
+    declared_only = [
+        r
+        for r in declared_only_relations(session, environment=environment, since=since, until=until)
+        if r.source_id == service_id
+    ]
+    coverage = telemetry_coverage(
+        session, environment=environment, since=since, until=until, service_ids=[service_id]
+    )[0]
+
+    relations = (
+        [
+            RuntimeRelationStatus(
+                relation_type=r.relation_type,
+                target_id=r.target_id,
+                target_name=r.target_name,
+                status="CONFIRMED",
+                first_seen=r.first_seen,
+                last_seen=r.last_seen,
+                observation_count=r.observation_count,
+                telemetry_coverage_available=None,
+            )
+            for r in confirmed
+        ]
+        + [
+            RuntimeRelationStatus(
+                relation_type=r.relation_type,
+                target_id=r.target_id,
+                target_name=r.target_name,
+                status="OBSERVED_ONLY",
+                first_seen=r.first_seen,
+                last_seen=r.last_seen,
+                observation_count=r.observation_count,
+                telemetry_coverage_available=None,
+            )
+            for r in observed_only
+        ]
+        + [
+            RuntimeRelationStatus(
+                relation_type=r.relation_type,
+                target_id=r.target_id,
+                target_name=r.target_name,
+                status=r.status,
+                first_seen=None,
+                last_seen=None,
+                observation_count=None,
+                telemetry_coverage_available=r.telemetry_coverage_available,
+            )
+            for r in declared_only
+        ]
+    )
+    return ServiceRuntimeProfile(
+        service_id=service_id,
+        service_name=name_row["name"],
+        environment=environment,
+        since=since,
+        coverage=coverage,
+        relations=relations,
+    )

@@ -7,9 +7,11 @@ from fastapi.templating import Jinja2Templates
 
 from app.analysis.blast_radius import blast_radius
 from app.analysis.queues import consumers_of_queue, senders_of_queue
+from app.analysis.runtime import default_since, service_runtime_profile
 from app.answer_router import LLMNotConfiguredError, answer_question
 from app.api.query import QueryResponse
 from app.deps import build_question_service, get_read_session, get_settings
+from app.settings import Settings
 
 router = APIRouter(tags=["ui"])
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
@@ -18,8 +20,17 @@ _EVIDENCE_BY_IDS_QUERY = (
     "UNWIND $ids AS eid "
     "MATCH (e:Evidence {id: eid}) "
     "RETURN e.id AS id, e.source_type AS source_type, e.source_file AS source_file, "
-    "e.source_revision AS source_revision, e.evidence_type AS evidence_type"
+    "e.source_revision AS source_revision, e.evidence_type AS evidence_type, "
+    "e.environment AS environment, e.first_seen AS first_seen, e.last_seen AS last_seen, "
+    "e.observation_count AS observation_count"
 )
+
+
+def _humanize_window_hours(hours: int) -> str:
+    if hours % 24 == 0:
+        days = hours // 24
+        return "1 day" if days == 1 else f"{days} days"
+    return f"{hours}h"
 
 
 def _attach_evidence(session: neo4j.Session, rows: list[dict]) -> list[dict]:
@@ -53,7 +64,11 @@ def index(request: Request, session: neo4j.Session = Depends(get_read_session)):
 
 @router.get("/services/{service_id}", response_class=HTMLResponse)
 def service_explorer(
-    request: Request, service_id: str, session: neo4j.Session = Depends(get_read_session)
+    request: Request,
+    service_id: str,
+    environment: str | None = None,
+    session: neo4j.Session = Depends(get_read_session),
+    settings: Settings = Depends(get_settings),
 ):
     service = session.run(
         "MATCH (s:Service {id: $id}) RETURN s.id AS id, s.name AS name", id=service_id
@@ -97,6 +112,10 @@ def service_explorer(
     )
     downstream = blast_radius(session, service_id, max_depth=1)
 
+    env = environment or settings.config.runtime_analysis.default_environment
+    since = default_since(settings.config.runtime_analysis.default_window_hours)
+    observed = service_runtime_profile(session, service_id=service_id, environment=env, since=since)
+
     return templates.TemplateResponse(
         request,
         "service.html",
@@ -107,6 +126,10 @@ def service_explorer(
             "sends": sends,
             "receives": receives,
             "downstream": downstream,
+            "observed": observed,
+            "observed_window_label": _humanize_window_hours(
+                settings.config.runtime_analysis.default_window_hours
+            ),
         },
     )
 
@@ -166,6 +189,8 @@ def query_page(
                 question=question,
                 deterministic_threshold=settings.config.intent_router.deterministic_threshold,
                 question_service=question_service,
+                default_window_hours=settings.config.runtime_analysis.default_window_hours,
+                default_environment=settings.config.runtime_analysis.default_environment,
             )
             result = QueryResponse(
                 question=routed.question,

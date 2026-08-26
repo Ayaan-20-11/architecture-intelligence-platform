@@ -10,6 +10,7 @@ from app.analysis.runtime import (
     declared_only_relations,
     observed_only_relations,
     observed_relations,
+    service_runtime_profile,
     telemetry_coverage,
 )
 from app.canonical import ids
@@ -345,3 +346,68 @@ def test_o5_provider_side_gap_is_pinned(driver, session):
         session, environment="o5-gap-env", since=SINCE, service_ids=[ghost_provider_id]
     )
     assert results[0].http_observed is False  # the documented gap, pinned by a real assertion
+
+
+# --- service_runtime_profile: composes O2+O3+O4+O5 for one service (11G) ------------------------
+
+
+def test_service_runtime_profile_combines_confirmed_observed_only_and_declared_only(
+    driver, session
+):
+    order_id = ids.service_id("order-service")
+    product_operation_id = ids.operation_id("product-service", "GET", "/products/{id}")
+    product_service_id = ids.service_id("product-service")
+    legacy_operation_id = ids.operation_id(product_service_id, "GET", "/legacy/pricing")
+
+    # order-service -> product-service GET /products/{id}: declared (examples fixture) + observed -> CONFIRMED
+    # order-service -> undeclared operation: observed only -> OBSERVED_ONLY
+    # order-service -> payment-q: declared (examples fixture), left unobserved in this env -> NOT_OBSERVED_IN_WINDOW
+    _persist(
+        driver,
+        _fact(
+            subject_id=order_id,
+            relation_type="CALLS",
+            object_id=product_operation_id,
+            environment="profile-env",
+        ),
+        _fact(
+            subject_id=order_id,
+            relation_type="CALLS",
+            object_id=legacy_operation_id,
+            environment="profile-env",
+        ),
+        entities=[
+            ObservedOnlyEntity(
+                id=legacy_operation_id, label="Operation", name="GET /legacy/pricing"
+            )
+        ],
+    )
+
+    profile = service_runtime_profile(
+        session, service_id=order_id, environment="profile-env", since=SINCE
+    )
+    assert profile is not None
+    assert profile.service_id == order_id
+    assert profile.environment == "profile-env"
+
+    by_status = {}
+    for r in profile.relations:
+        by_status.setdefault(r.status, []).append(r)
+
+    assert any(r.target_id == product_service_id for r in by_status.get("CONFIRMED", []))
+    assert any(r.target_id == legacy_operation_id for r in by_status.get("OBSERVED_ONLY", []))
+    declared_only_targets = {r.target_id for r in by_status.get(NOT_OBSERVED_IN_WINDOW, [])}
+    assert ids.queue_id("payment-q") in declared_only_targets
+
+    direct_coverage = telemetry_coverage(
+        session, environment="profile-env", since=SINCE, service_ids=[order_id]
+    )[0]
+    assert profile.coverage.http_observed == direct_coverage.http_observed
+    assert profile.coverage.messaging_observed == direct_coverage.messaging_observed
+
+
+def test_service_runtime_profile_returns_none_for_unknown_service(session):
+    profile = service_runtime_profile(
+        session, service_id="service:does-not-exist", environment="profile-env", since=SINCE
+    )
+    assert profile is None

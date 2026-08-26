@@ -112,6 +112,88 @@ def test_a5_blast_radius_recognized(question):
     assert result.parameters == {"service_id": "service:order-service"}
 
 
+# --- O1 observed relations ---------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "What architecture relationships were actually observed?",
+        "Which relationships were observed at runtime?",
+        "Welche Architekturbeziehungen wurden tatsächlich beobachtet?",
+    ],
+)
+def test_o1_observed_relations_recognized(question):
+    result = classify_default(question)
+    assert result.intent == ArchitectureIntent.OBSERVED_RELATIONS
+    assert result.parameters == {}
+
+
+# --- O2 confirmed relations ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Which relations are confirmed by both declared and observed data?",
+        "Welche Beziehungen sind bestätigt?",
+        "Was ist sowohl dokumentiert als auch beobachtet?",
+    ],
+)
+def test_o2_confirmed_relations_recognized(question):
+    result = classify_default(question)
+    assert result.intent == ArchitectureIntent.CONFIRMED_RELATIONS
+    assert result.parameters == {}
+
+
+# --- O3 observed-only relations ------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Which undocumented dependencies were observed at runtime?",
+        "Welche undokumentierten REST-Abhängigkeiten wurden in Production beobachtet?",
+    ],
+)
+def test_o3_observed_only_relations_recognized(question):
+    result = classify_default(question)
+    assert result.intent == ArchitectureIntent.OBSERVED_ONLY_RELATIONS
+    assert result.parameters == {}
+
+
+# --- O4 declared-only relations ------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Which declared relations were not observed in the last window?",
+        "Welche deklarierte Kommunikation wurde in den letzten sieben Tagen nicht beobachtet?",
+    ],
+)
+def test_o4_declared_only_relations_recognized(question):
+    result = classify_default(question)
+    assert result.intent == ArchitectureIntent.DECLARED_ONLY_RELATIONS
+    assert result.parameters == {}
+
+
+# --- O5 telemetry coverage -----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Which services have no telemetry?",
+        "Für welche Services haben wir keine Telemetrie?",
+    ],
+)
+def test_o5_telemetry_coverage_recognized(question):
+    result = classify_default(question)
+    assert result.intent == ArchitectureIntent.TELEMETRY_COVERAGE
+    assert result.parameters == {}
+
+
 # --- ambiguity / unknown -----------------------------------------------------------------------
 
 

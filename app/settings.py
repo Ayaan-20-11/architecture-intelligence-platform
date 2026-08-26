@@ -38,6 +38,7 @@ class TelemetryConfig(BaseModel):
 
 class RuntimeAnalysisConfig(BaseModel):
     default_window_hours: int = 24
+    default_environment: str = "production"
 
 
 class AppConfig(BaseModel):

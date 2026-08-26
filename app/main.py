@@ -7,7 +7,18 @@ from fastapi.responses import JSONResponse
 
 from app.ai.provider import OpenAIProvider
 from app.ai.semantic_query_validator import SemanticValidationError
-from app.api import analysis, evidence, import_api, messages, query, queues, services, telemetry, ui
+from app.api import (
+    analysis,
+    evidence,
+    import_api,
+    messages,
+    query,
+    queues,
+    runtime,
+    services,
+    telemetry,
+    ui,
+)
 from app.deps import get_driver, get_settings
 from app.graph.repository import build_driver, open_session
 from app.settings import Settings, load_settings
@@ -42,6 +53,8 @@ def create_app() -> FastAPI:
     app.include_router(query.router)
     app.include_router(evidence.router)
     app.include_router(telemetry.router)
+    app.include_router(runtime.runtime_router)
+    app.include_router(runtime.runtime_analysis_router)
     app.include_router(ui.router)
 
     @app.exception_handler(SemanticValidationError)

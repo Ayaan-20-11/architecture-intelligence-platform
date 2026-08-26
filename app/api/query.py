@@ -41,6 +41,8 @@ def post_query(
             question=request.question,
             deterministic_threshold=settings.config.intent_router.deterministic_threshold,
             question_service=question_service,
+            default_window_hours=settings.config.runtime_analysis.default_window_hours,
+            default_environment=settings.config.runtime_analysis.default_environment,
         )
     except LLMNotConfiguredError as exc:
         raise HTTPException(

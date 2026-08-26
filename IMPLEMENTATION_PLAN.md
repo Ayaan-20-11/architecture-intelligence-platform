@@ -671,6 +671,86 @@ assigns that to 11G, mirroring how the base PoC's A1-A5 were built before their 
   an uncovered subject; environment scoping across O2-O4; O5's four coverage signals for a caller, a
   sender/receiver, a service with zero telemetry, and the pinned provider-side gap.
 
+## Iteration 11G — Runtime API / UI / Intent Router (H4)
+`Architecture_Intelligence_Platform_H4_OpenTelemetry_Specification.md` §47-52, §63, §65 (H4.13-H4.18),
+§67. **Exit criterion:** the last H4 sub-iteration — 11F's five pure O1-O5 analysis functions become
+reachable via REST, the Service Explorer UI, and deterministic NL intents, closing out H4 end-to-end.
+
+- **Two judgment calls, made explicit up front:**
+  - *Response envelope*: every existing route module (`analysis.py`, `services.py`, `queues.py`,
+    `evidence.py`) returns raw dataclasses/dicts, snake_case, no envelope; spec §48 is the only place
+    in the spec+codebase giving an explicit camelCase-enveloped JSON contract
+    (`{environment, window: {from, to}, relations: [...]}}`). Decision: the new `app/api/runtime.py`
+    module alone uses Pydantic response models with camelCase aliases, applied uniformly to all six
+    endpoints (not just the one spec gave an example for) — a bounded exception, not a repo-wide
+    convention change. The NL/intent-router path (`/api/query`) deliberately keeps the existing flat
+    `dataclasses.asdict()` shape, so the same O-analysis returns differently-shaped JSON via REST vs.
+    NL — a documented, accepted consequence, not an oversight.
+  - *Environment/window defaulting for NL questions*: O2-O5 require a concrete `environment` (11F: the
+    same fact can be `CONFIRMED` in production and `DECLARED_ONLY` in staging simultaneously). Spec's
+    own O3/O4/O5 example questions inconsistently name an environment/window inline, and the existing
+    `classify()`/`IntentPattern`/`entity_resolver.py` machinery only extracts one named graph entity per
+    pattern — no free-text environment/date parsing. Decision: every O-intent always uses a configured
+    default environment (`RuntimeAnalysisConfig.default_environment = "production"`, new) and default
+    window (`default_window_hours`, from 11F), regardless of question wording — never parsed from text.
+- `app/settings.py`, `config.yaml` — `RuntimeAnalysisConfig.default_environment` (new field).
+- `app/analysis/runtime.py` — additive only, 11F's five functions untouched: `DEFAULT_ENVIRONMENT`,
+  `RuntimeRelationStatus`, `ServiceRuntimeProfile`, `service_runtime_profile()` (composes
+  `confirmed_relations`/`observed_only_relations`/`declared_only_relations`/`telemetry_coverage`,
+  filtered to one `source_id` in Python — deliberately not adding a `from_id` filter to those four
+  tested functions — backing both the new per-service REST endpoint and the Service Explorer's
+  Observed section so both consumers get byte-identical results, mirroring how `BLAST_RADIUS` already
+  shares `blast_radius.DEFAULT_MAX_DEPTH` with its REST endpoint for the same reason).
+- `app/api/runtime.py` (new) — two `APIRouter`s matching spec §47's literal prefix split:
+  `runtime_router` (`/api/runtime/relations` for O1, `/api/runtime/services/{id}` for the new profile
+  endpoint) and `runtime_analysis_router` (`/api/analysis/runtime/{confirmed,observed-only,declared-only,coverage}`
+  for O2-O5, mirroring how `/api/analysis` already houses A1-A5). All Pydantic response models carry a
+  `_native()` conversion on `first_seen`/`last_seen` before serialization — Neo4j returns temporal
+  properties as `neo4j.time.DateTime`, not `datetime.datetime`, which Pydantic rejects outright on
+  serialize (the same class of gotcha 11E's `.to_native()` fix addressed on the read side, now hit for
+  the first time on the *write*/response side since 11F's dataclasses are plain and never validate).
+  Mounted in `app/main.py`.
+- `app/api/ui.py`, `app/templates/service.html` — `service_explorer()` gains an `environment` query
+  param + `Settings` dependency, computing an `observed` profile via `service_runtime_profile()`; the
+  template's four duplicated inline evidence-rendering snippets are factored into one Jinja macro
+  (net simplification) gaining an OBSERVED branch (environment/first_seen/last_seen/observation_count,
+  spec §50) alongside the existing DECLARED branch; a new "Observed" section renders each relation with
+  a ✓/!/○ (`CONFIRMED`/`OBSERVED_ONLY`/`NOT_OBSERVED_IN_WINDOW`) glyph + legend (spec §49) — the raw
+  `status` string is rendered verbatim, never re-worded as "obsolete"/"unused"/"dead" (H4.16, pinned by
+  a dedicated negative-assertion test). `_EVIDENCE_BY_IDS_QUERY` (shared with `queue_explorer()`) gains
+  the three OBSERVED-only columns; harmless unused columns for `queue.html`, which is explicitly out of
+  scope here (spec §49: "existing page is extended," singular).
+- `app/intent/model.py`, `app/intent/patterns.py`, `app/analysis/registry.py`, `app/answer_router.py` —
+  five new `O#_`-prefixed `ArchitectureIntent` members (spec gives bare names only); five new
+  keyword-combination `IntentPattern`s with no `entity_label` (O1-O5 answer "what happened," scoped by
+  config defaults, not a named entity) — spec gives verbatim German examples for O3/O4/O5, EN and O1/O2
+  phrasings invented consistent with the existing style; `registry.execute()` gains optional
+  `since`/`environment` kwargs merged into the handler's `parameters` dict (backward-compatible — the
+  existing 2-arg call convention and monkeypatch-based test still work unmodified) plus a `_to_native()`
+  conversion mirroring the REST layer's fix, since `QueryResponse.rows` is JSON-serialized too;
+  `answer_question()` gains matching kwargs defaulted to `runtime.py`'s own constants, so every existing
+  call site (including all tests) keeps working unmodified; `post_query()`/`query_page()` each pass
+  `settings.config.runtime_analysis.*` through at their existing call sites.
+- 30 new tests (319 unit / 121 integration, up from 305/105): `service_runtime_profile()` composing all
+  three statuses correctly for one service + returning `None` for an unknown service; a new
+  `tests/integration/test_runtime_api.py` implementing spec §63's Testlandscape verbatim (OrderService →
+  ProductService `CONFIRMED`, OrderService → LegacyPricingService `OBSERVED_ONLY`, PaymentService →
+  invoice-q `DECLARED_ONLY`) — all six REST endpoints (envelope shape, camelCase keys, §48's literal JSON
+  contract pinned exactly on `/observed-only`), the UI Observed section (H4.16 negative-wording assertion,
+  OBSERVED evidence block rendering), and NL routing for all five O-intents against a real graph; five new
+  parametrized EN/DE intent-recognition blocks in `test_intent_patterns_and_router.py` (pinning
+  `result.parameters == {}` — confirms `classify()` stays entirely environment/window-agnostic); two new
+  `registry.execute()` tests for the `since`/`environment` merge behavior. One real bug caught by the
+  first integration test run (not by design review): building Pydantic response models around 11F's
+  `RelationObservation` rows surfaced the `neo4j.time.DateTime` non-serializability gotcha for the first
+  time on the response/write side — fixed with a `_native()`/`_to_native()` helper at both new call sites
+  (REST layer, NL/registry layer) rather than reopening 11F's tested dataclasses.
+- Explicitly deferred beyond 11G (and confirmed out of scope for all of H4, not just this iteration, per
+  spec review — not assigned to any of 11A-11G, not required by any H4.# acceptance criterion): §55-57's
+  Docker Compose `otel-collector` service (an optional production-hardening layer; `POST /v1/traces`
+  already accepts OTLP directly since 11A); §59-60's retention/cleanup job (§59 itself frames 90-day
+  retention as a proposal, not a requirement).
+
 ## Getting started
 
 Iterations 0 and 1 need no Neo4j/Docker and can start immediately:
