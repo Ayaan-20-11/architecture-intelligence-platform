@@ -1,4 +1,14 @@
-from app.canonical.ids import evidence_id, message_id, operation_id, queue_id, schema_id, service_id
+from datetime import UTC, datetime
+
+from app.canonical.ids import (
+    evidence_id,
+    message_id,
+    observed_evidence_id,
+    operation_id,
+    queue_id,
+    schema_id,
+    service_id,
+)
 
 
 def test_service_id_matches_spec_example():
@@ -65,6 +75,50 @@ def test_evidence_id_changes_when_revision_changes():
     assert evidence_id("OPENAPI", "order-service", "abc123") != evidence_id(
         "OPENAPI", "order-service", "def456"
     )
+
+
+def test_observed_evidence_id_is_deterministic():
+    bucket_start = datetime(2026, 8, 26, tzinfo=UTC)
+    assert observed_evidence_id(
+        "production", bucket_start, "service:order-service", "CALLS", "operation:x:GET:/y"
+    ) == observed_evidence_id(
+        "production", bucket_start, "service:order-service", "CALLS", "operation:x:GET:/y"
+    )
+
+
+def test_observed_evidence_id_matches_spec_example_shape():
+    bucket_start = datetime(2026, 8, 26, tzinfo=UTC)
+    result = observed_evidence_id(
+        "production", bucket_start, "service:order-service", "CALLS", "operation:x:GET:/y"
+    )
+    assert result.startswith("evidence:otel:production:2026-08-26:")
+
+
+def test_observed_evidence_id_changes_with_different_fact():
+    bucket_start = datetime(2026, 8, 26, tzinfo=UTC)
+    a = observed_evidence_id(
+        "production", bucket_start, "service:order-service", "CALLS", "operation:x:GET:/y"
+    )
+    b = observed_evidence_id(
+        "production", bucket_start, "service:payment-service", "CALLS", "operation:x:GET:/y"
+    )
+    assert a != b
+
+
+def test_observed_evidence_id_changes_with_different_environment_or_day():
+    bucket_start = datetime(2026, 8, 26, tzinfo=UTC)
+    other_day = datetime(2026, 8, 27, tzinfo=UTC)
+    base = observed_evidence_id(
+        "production", bucket_start, "service:order-service", "CALLS", "operation:x:GET:/y"
+    )
+    diff_env = observed_evidence_id(
+        "staging", bucket_start, "service:order-service", "CALLS", "operation:x:GET:/y"
+    )
+    diff_day = observed_evidence_id(
+        "production", other_day, "service:order-service", "CALLS", "operation:x:GET:/y"
+    )
+    assert base != diff_env
+    assert base != diff_day
 
 
 def test_ids_are_deterministic_across_calls():

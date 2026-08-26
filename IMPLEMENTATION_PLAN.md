@@ -428,6 +428,68 @@ iteration diagrams with no terminal write-shaped box, confirming this reading.
   a known service and mints an unmatched one - with an explicit assertion that no `Service` node was
   written to the graph, since this iteration's resolver stays read-only.
 
+## Iteration 11C — REST Observations (H4)
+`Architecture_Intelligence_Platform_H4_OpenTelemetry_Specification.md` §16-23, §31-36, §67. **Exit
+criterion:** correlated HTTP CLIENT/SERVER span pairs produce real `ObservedFactCandidate`/
+`ObservedEvidence` records (spec §34's exact data contract) - resolving the called Operation against
+declared OpenAPI operations, or minting a stable observed-only id. Independent review of §5/§9/§16-19/
+§34-36/§67 confirmed constructing the real evidence-shaped output is this Resolver stage's own job, not
+deferred to the later Aggregator (11E) - 11E's role is *merging many* single-observation "seeds" (a
+degenerate bucket-of-one: `bucket_start == bucket_end`'s day, `first_seen == last_seen == timestamp`,
+`observation_count = 1`) into the real persisted, time-bounded bucket. **No Neo4j writes** - consistent
+with 11A/11B.
+
+- `app/canonical/ids.py` — new `observed_evidence_id(environment, bucket_start, subject_id,
+  relation_type, object_id)`, matching spec §17's literal example format
+  (`evidence:otel:production:2026-08-26:<fact-hash>`). Has no trace/span-specific component
+  deliberately - every seed for the same `(fact, day, environment)` gets the identical id, the
+  precondition for 11E's Aggregator to `MERGE` rather than search.
+- `app/provenance/model.py` — new `SourceType`/`EvidenceType` `StrEnum`s (spec §15's first real
+  implementation - previously just documented as plain strings) and `ObservedEvidence(Provenance)`
+  (spec §16's exact fields), with `source_type`/`source_file`/`evidence_type` overridden as **class-level
+  defaults** (every instance has the same values for all three, so no per-call-site magic strings).
+  `Provenance`'s own field *types* stay plain `str` - not retyped, since a `StrEnum` member is a valid
+  `str` and this avoids touching a stable H1-era contract.
+- `app/telemetry/semconv/http.py` (new) — HTTP attribute key constants (spec §32), mirroring
+  `semconv/resources.py`.
+- `app/telemetry/model.py` — new `day_bucket()` (UTC calendar-day truncation, shared since 11D's queue
+  observations need the same computation), `ObservedFactCandidate`, `ObservedOnlyEntity` (a deliberate
+  simplification of spec's `ArchitectureEntity`, which is referenced in §35 but never actually defined
+  anywhere in the spec - just `id`/`label`/`name`, not the full declared `Service`/`Operation` models'
+  many required fields), `UnresolvedObservation`, `ObservationBatch` (spec §35's exact shape).
+- `app/telemetry/operation_resolver.py` (new, structural sibling of `service_resolver.py`) —
+  `resolve_operation(candidates, *, provider_service_id, method, route)`: Fall A (spec §23) reuses an
+  existing declared operation's id verbatim; Fall B mints via the *existing* `ids.operation_id()`
+  formatter, passing the full `provider_service_id` (not a bare slug, which `service_resolver.py` never
+  exposes for either declared or observed-only resolutions) - visually distinguishing minted ids from
+  declared ones as a side effect, not a special case; Fall C (no stable route) is `None`/`None` -
+  UNRESOLVED, never a graph node (prevents `/products/4711`, `/products/4712`, ... from each minting a
+  distinct Operation).
+- `app/telemetry/adapter.py` (new - matches spec §54/§9's own "OpenTelemetryAdapter" naming) —
+  `correlate_http_call_observations()`. Correlation is **scoped to spans within one decoded OTLP batch
+  only**: a call whose client/server spans are exported in different `/v1/traces` POSTs produces zero
+  observations - an accepted, permanent PoC limitation (real Collector batch processors flush by
+  time/size, not trace completeness), not a bug; building cross-batch stateful pairing would be exactly
+  the "trace store"/causality graph spec §4.2 explicitly excludes. Environment/method/route/timestamp are
+  read from the **server** span, not the client - necessary, not just stylistic: declared `Operation`
+  ids are minted from the provider's own OpenAPI path, so sourcing the route from the client's
+  `url.template` risks a lexical mismatch that would silently break Fall A (H4.6).
+  `source_service_version` comes from the **client** span. A missing environment is treated as
+  `UnresolvedObservation(reason=NO_ENVIRONMENT)`, never a fabricated `"unknown"` sentinel - matching
+  every prior iteration's "never guess" principle.
+- Explicitly deferred: wiring into `POST /v1/traces` (still decodes-and-discards); any Neo4j write
+  (11E); a combined `adapt(raw_bytes) -> ObservationBatch` orchestrator (waits for 11D so it can combine
+  both HTTP and queue observations in one call); queue observations (11D); merging multiple
+  `ObservedEvidence` seeds into a real persisted bucket (11E).
+- 26 new tests (277 unit / 84 integration, up from 253/82): `observed_evidence_id` determinism/
+  sensitivity; the operation resolver's three Falls plus method case-insensitivity and wrong-provider
+  non-matching; the adapter's correlation pairing (matched/unpaired/mismatched-trace-id/empty-batch
+  cases, locking in the within-batch-only scope decision), both unresolved reasons, full evidence-field
+  correctness (defaults, determinism, bucket bounds), and `ObservedOnlyEntity` deduplication; two
+  Testcontainers integration tests proving Fall A reuses the *real* declared `order-service →
+  product-service GET /products/{id}` operation id (direct H4.6 proof) and Fall B mints a stable
+  observed-only id against real service data, both with explicit "nothing written to Neo4j" assertions.
+
 ## Getting started
 
 Iterations 0 and 1 need no Neo4j/Docker and can start immediately:
