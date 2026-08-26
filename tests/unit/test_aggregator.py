@@ -102,3 +102,30 @@ def test_bucket_bounds_and_metadata_come_from_the_seed():
     assert result.service_version == "2.0.0"
     assert result.source_type == "OPENTELEMETRY"
     assert result.evidence_type == "OBSERVED"
+
+
+# --- correlation_mode strength ordering (11H-C) --------------------------------------------------
+
+
+def test_merge_keeps_the_stronger_mode_when_existing_is_stronger():
+    existing = _evidence(correlation_mode="CLIENT_SERVER")
+    seed = _evidence(correlation_mode="CLIENT_ONLY")
+    result = merge_evidence(existing, seed)
+    assert result.correlation_mode == "CLIENT_SERVER"
+
+
+def test_merge_keeps_the_stronger_mode_when_seed_is_stronger():
+    existing = _evidence(correlation_mode="MESSAGING_SEND")
+    seed = _evidence(correlation_mode="CLIENT_SERVER")
+    result = merge_evidence(existing, seed)
+    assert result.correlation_mode == "CLIENT_SERVER"
+
+
+def test_merge_prefers_a_real_mode_over_none_from_either_side():
+    existing = _evidence(correlation_mode=None)
+    seed = _evidence(correlation_mode="SERVER_ONLY")
+    assert merge_evidence(existing, seed).correlation_mode == "SERVER_ONLY"
+
+    existing = _evidence(correlation_mode="SERVER_ONLY")
+    seed = _evidence(correlation_mode=None)
+    assert merge_evidence(existing, seed).correlation_mode == "SERVER_ONLY"

@@ -1,6 +1,9 @@
 from datetime import UTC, datetime
 
 from app.telemetry.adapter import (
+    CORRELATION_EXPIRED,
+    MISSING_CALLER_IDENTITY,
+    MISSING_TARGET_IDENTITY,
     NO_DESTINATION_NAME,
     NO_ENVIRONMENT,
     NO_STABLE_ROUTE,
@@ -175,6 +178,119 @@ def test_leftover_server_missing_route_is_unresolved_not_buffered():
     assert buffer.cross_batch_matches == 0
 
 
+def test_cross_batch_correlated_pair_has_client_server_correlation_mode():
+    client, server = _client_server_pair()
+    buffer = HttpCorrelationBuffer(ttl_seconds=60, max_pending_spans=10000)
+    _correlate([client], correlation_buffer=buffer)
+    batch = _correlate([server], correlation_buffer=buffer)
+    assert batch.facts[0].evidence.correlation_mode == "CLIENT_SERVER"
+
+
+def test_in_batch_correlated_pair_has_client_server_correlation_mode():
+    client, server = _client_server_pair()
+    batch = _correlate([client, server])
+    assert batch.facts[0].evidence.correlation_mode == "CLIENT_SERVER"
+
+
+# --- partial instrumentation: CLIENT_ONLY / SERVER_ONLY (11H-C) -------------------------------
+
+
+def _expire_client(buffer, client):
+    key = (client.trace_id, client.span_id)
+    stored_span, _ = buffer._pending_clients[key]
+    buffer._pending_clients[key] = (stored_span, datetime(2000, 1, 1, tzinfo=UTC))
+
+
+def _expire_server(buffer, server):
+    key = (server.trace_id, server.parent_span_id)
+    stored_span, _ = buffer._pending_servers[key]
+    buffer._pending_servers[key] = (stored_span, datetime(2000, 1, 1, tzinfo=UTC))
+
+
+def test_client_only_with_peer_service_produces_a_calls_fact():
+    client = _span(
+        span_kind="CLIENT",
+        attributes={
+            "http.request.method": "GET",
+            "http.route": "/products/{id}",
+            "peer.service": "ProductService",
+        },
+    )
+    buffer = HttpCorrelationBuffer(ttl_seconds=60, max_pending_spans=10000)
+    _correlate([client], correlation_buffer=buffer)
+    _expire_client(buffer, client)
+
+    batch = _correlate([], correlation_buffer=buffer)
+
+    assert len(batch.facts) == 1
+    fact = batch.facts[0]
+    assert fact.subject_id == "service:order-service"
+    assert fact.object_id == "operation:product-service:GET:/products/{id}"
+    assert fact.evidence.correlation_mode == "CLIENT_ONLY"
+    assert batch.unresolved == []
+
+
+def test_client_only_without_peer_service_is_unresolved():
+    client = _span(
+        span_kind="CLIENT",
+        attributes={"http.request.method": "GET", "http.route": "/products/{id}"},
+    )
+    buffer = HttpCorrelationBuffer(ttl_seconds=60, max_pending_spans=10000)
+    _correlate([client], correlation_buffer=buffer)
+    _expire_client(buffer, client)
+
+    batch = _correlate([], correlation_buffer=buffer)
+
+    assert batch.facts == []
+    assert [u.reason for u in batch.unresolved] == [MISSING_TARGET_IDENTITY]
+
+
+def test_client_only_without_method_or_route_is_correlation_expired():
+    client = _span(span_kind="CLIENT", attributes={"peer.service": "ProductService"})
+    buffer = HttpCorrelationBuffer(ttl_seconds=60, max_pending_spans=10000)
+    _correlate([client], correlation_buffer=buffer)
+    _expire_client(buffer, client)
+
+    batch = _correlate([], correlation_buffer=buffer)
+
+    assert batch.facts == []
+    assert [u.reason for u in batch.unresolved] == [CORRELATION_EXPIRED]
+
+
+def test_client_only_without_environment_is_unresolved():
+    client = _span(
+        span_kind="CLIENT",
+        environment=None,
+        attributes={
+            "http.request.method": "GET",
+            "http.route": "/products/{id}",
+            "peer.service": "ProductService",
+        },
+    )
+    buffer = HttpCorrelationBuffer(ttl_seconds=60, max_pending_spans=10000)
+    _correlate([client], correlation_buffer=buffer)
+    _expire_client(buffer, client)
+
+    batch = _correlate([], correlation_buffer=buffer)
+
+    assert batch.facts == []
+    assert [u.reason for u in batch.unresolved] == [NO_ENVIRONMENT]
+
+
+def test_server_only_never_invents_a_caller():
+    _, server = _client_server_pair(service_name="FraudService")
+    buffer = HttpCorrelationBuffer(ttl_seconds=60, max_pending_spans=10000)
+    _correlate([server], correlation_buffer=buffer)
+    _expire_server(buffer, server)
+
+    batch = _correlate([], correlation_buffer=buffer)
+
+    assert batch.facts == []
+    assert [u.reason for u in batch.unresolved] == [MISSING_CALLER_IDENTITY]
+    # The provider itself is still recorded as an observed-only entity, even with no caller.
+    assert any(e.label == "Service" and e.name == "FraudService" for e in batch.entities)
+
+
 # --- unresolved reasons --------------------------------------------------------------------------
 
 
@@ -287,6 +403,7 @@ def test_send_span_produces_sends_fact():
     assert fact.subject_id == "service:order-service"
     assert fact.relation_type == "SENDS"
     assert fact.object_id == "queue:payment-q"
+    assert fact.evidence.correlation_mode == "MESSAGING_SEND"
     assert batch.unresolved == []
 
 
@@ -300,6 +417,7 @@ def test_receive_span_produces_receives_from_fact():
     )
     batch = _queue_correlate([span])
     assert batch.facts[0].relation_type == "RECEIVES_FROM"
+    assert batch.facts[0].evidence.correlation_mode == "MESSAGING_RECEIVE"
 
 
 def test_process_span_produces_receives_from_fact():
@@ -312,6 +430,7 @@ def test_process_span_produces_receives_from_fact():
     )
     batch = _queue_correlate([span])
     assert batch.facts[0].relation_type == "RECEIVES_FROM"
+    assert batch.facts[0].evidence.correlation_mode == "MESSAGING_PROCESS"
 
 
 def test_unrecognized_operation_type_is_silently_skipped():

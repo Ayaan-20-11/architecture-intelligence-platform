@@ -15,7 +15,7 @@ from app.telemetry.model import (
 )
 from app.telemetry.operation_resolver import DeclaredOperationCandidate, resolve_operation
 from app.telemetry.queue_resolver import DeclaredQueueCandidate, resolve_queue
-from app.telemetry.semconv.http import HTTP_REQUEST_METHOD, HTTP_ROUTE, URL_TEMPLATE
+from app.telemetry.semconv.http import HTTP_REQUEST_METHOD, HTTP_ROUTE, PEER_SERVICE, URL_TEMPLATE
 from app.telemetry.semconv.messaging import (
     MESSAGING_DESTINATION_NAME,
     MESSAGING_OPERATION_TYPE,
@@ -30,6 +30,13 @@ from app.telemetry.service_resolver import (
 NO_ENVIRONMENT = "no_environment"
 NO_STABLE_ROUTE = "no_stable_route"
 NO_DESTINATION_NAME = "no_destination_name"
+# 11H R3/spec §17 - CLIENT_ONLY/SERVER_ONLY-specific reason codes. Spec §17 lists three more
+# (UNSTABLE_HTTP_ROUTE, AMBIGUOUS_SERVICE, UNSUPPORTED_SPAN) with an "extend as needed" framing;
+# not added since none has a concrete trigger site in this codebase yet (NO_STABLE_ROUTE already
+# covers route instability).
+MISSING_TARGET_IDENTITY = "missing_target_identity"
+MISSING_CALLER_IDENTITY = "missing_caller_identity"
+CORRELATION_EXPIRED = "correlation_expired"
 
 
 def _find_correlated_pairs(
@@ -87,6 +94,7 @@ def _build_call_fact(
     route: str,
     timestamp: datetime,
     trace_id: str,
+    correlation_mode: str,
 ) -> ObservedFactCandidate | None:
     """Shared CALLS-fact core for both in-batch and cross-batch correlated observations, once both
     sides' service identity is already resolved and environment/method/route are known to be
@@ -120,6 +128,7 @@ def _build_call_fact(
         observation_count=1,
         sample_trace_ids=[trace_id],
         service_version=caller_service_version,
+        correlation_mode=correlation_mode,
     )
     return ObservedFactCandidate(
         subject_id=caller_service_id,
@@ -150,6 +159,11 @@ def _pending_span_from_server(server: RuntimeSpan, *, method: str, route: str) -
 
 
 def _pending_span_from_client(client: RuntimeSpan) -> PendingHttpSpan:
+    """Unlike the paired/cross-batch-matched CALLS path (which always sources method/route from
+    the SERVER span, per H4.6), a CLIENT_ONLY observation has no SERVER side to source from at
+    all - so method/route/target_identity are extracted here from the CLIENT span's own
+    attributes, even though the CLIENT_SERVER paths that also call this function never read them
+    back off a matched client (harmless, inert extra fields for those paths)."""
     return PendingHttpSpan(
         trace_id=client.trace_id,
         span_id=client.span_id,
@@ -159,6 +173,9 @@ def _pending_span_from_client(client: RuntimeSpan) -> PendingHttpSpan:
         service_namespace=client.service_namespace,
         service_version=client.service_version,
         environment=client.environment,
+        method=client.attributes.get(HTTP_REQUEST_METHOD),
+        route=client.attributes.get(HTTP_ROUTE) or client.attributes.get(URL_TEMPLATE),
+        target_identity=client.attributes.get(PEER_SERVICE),
         timestamp=client.end_time,
     )
 
@@ -244,6 +261,7 @@ def correlate_http_call_observations(
             route=route,
             timestamp=server.end_time,
             trace_id=server.trace_id,
+            correlation_mode="CLIENT_SERVER",
         )
         if fact is None:
             unresolved.append(
@@ -253,6 +271,108 @@ def correlate_http_call_observations(
         facts.append(fact)
 
     if correlation_buffer is not None:
+        # Drain whatever aged out of the buffer since it was last touched, independent of this
+        # batch's own spans (11H-C/spec §7) - a CLIENT/SERVER span that never gets a counterpart
+        # becomes a CLIENT_ONLY/SERVER_ONLY candidate instead of vanishing silently.
+        expired_clients, expired_servers = correlation_buffer.sweep_expired()
+
+        for expired_client in expired_clients:
+            caller = resolve_service(
+                service_candidates,
+                service_name=expired_client.service_name,
+                service_namespace=expired_client.service_namespace,
+                aliases=service_aliases,
+            )
+            _record_if_observed_only(
+                entities,
+                entity_id=caller.service_id,
+                discovery_status=caller.discovery_status,
+                label="Service",
+                name=expired_client.service_name,
+            )
+
+            if not expired_client.method or not expired_client.route:
+                unresolved.append(
+                    UnresolvedObservation(
+                        trace_id=expired_client.trace_id, reason=CORRELATION_EXPIRED
+                    )
+                )
+                continue
+            if not expired_client.target_identity:
+                # peer.service is the only allowlisted way to identify a CLIENT-only call's
+                # target - never guessed from server.address/an IP alone (spec §7.5).
+                unresolved.append(
+                    UnresolvedObservation(
+                        trace_id=expired_client.trace_id, reason=MISSING_TARGET_IDENTITY
+                    )
+                )
+                continue
+            if not expired_client.environment:
+                unresolved.append(
+                    UnresolvedObservation(trace_id=expired_client.trace_id, reason=NO_ENVIRONMENT)
+                )
+                continue
+
+            provider = resolve_service(
+                service_candidates,
+                service_name=expired_client.target_identity,
+                service_namespace=None,
+                aliases=service_aliases,
+            )
+            _record_if_observed_only(
+                entities,
+                entity_id=provider.service_id,
+                discovery_status=provider.discovery_status,
+                label="Service",
+                name=expired_client.target_identity,
+            )
+
+            fact = _build_call_fact(
+                operation_candidates=operation_candidates,
+                entities=entities,
+                caller_service_id=caller.service_id,
+                provider_service_id=provider.service_id,
+                caller_service_version=expired_client.service_version,
+                environment=expired_client.environment,
+                method=expired_client.method,
+                route=expired_client.route,
+                timestamp=expired_client.timestamp,
+                trace_id=expired_client.trace_id,
+                correlation_mode="CLIENT_ONLY",
+            )
+            if fact is None:
+                unresolved.append(
+                    UnresolvedObservation(trace_id=expired_client.trace_id, reason=NO_STABLE_ROUTE)
+                )
+                continue
+            facts.append(fact)
+
+        for expired_server in expired_servers:
+            # Every SERVER PendingHttpSpan the buffer stores was already validated (environment,
+            # method, route all present) before being offered - see the leftover_servers loop
+            # below. Nothing in this codebase's current semconv allowlist identifies a CALLER from
+            # a SERVER span alone (spec §7.3), so this is expected to fire for every SERVER_ONLY
+            # case today - the check exists so 11H.8 ("never invent an unknown caller") is a real,
+            # tested structural guarantee, not an accident of missing data.
+            provider = resolve_service(
+                service_candidates,
+                service_name=expired_server.service_name,
+                service_namespace=expired_server.service_namespace,
+                aliases=service_aliases,
+            )
+            _record_if_observed_only(
+                entities,
+                entity_id=provider.service_id,
+                discovery_status=provider.discovery_status,
+                label="Service",
+                name=expired_server.service_name,
+            )
+            unresolved.append(
+                UnresolvedObservation(
+                    trace_id=expired_server.trace_id, reason=MISSING_CALLER_IDENTITY
+                )
+            )
+
         for server in leftover_servers:
             if not server.environment:
                 unresolved.append(
@@ -307,6 +427,7 @@ def correlate_http_call_observations(
                 route=route,
                 timestamp=server.end_time,
                 trace_id=server.trace_id,
+                correlation_mode="CLIENT_SERVER",
             )
             if fact is not None:
                 facts.append(fact)
@@ -354,6 +475,7 @@ def correlate_http_call_observations(
                 route=matched_server.route,
                 timestamp=matched_server.timestamp,
                 trace_id=matched_server.trace_id,
+                correlation_mode="CLIENT_SERVER",
             )
             if fact is not None:
                 facts.append(fact)
@@ -388,9 +510,14 @@ def correlate_queue_observations(
     for span in spans:
         operation_type = (span.attributes.get(MESSAGING_OPERATION_TYPE) or "").lower()
         if operation_type == "send":
-            relation_type = "SENDS"
-        elif operation_type in ("receive", "process"):
-            relation_type = "RECEIVES_FROM"
+            relation_type, correlation_mode = "SENDS", "MESSAGING_SEND"
+        elif operation_type == "receive":
+            relation_type, correlation_mode = "RECEIVES_FROM", "MESSAGING_RECEIVE"
+        elif operation_type == "process":
+            # receive and process both map to the same RECEIVES_FROM relation type (spec §25/§26)
+            # but keep distinct correlation_mode values (11H R3/spec §14) - the relation semantics
+            # don't change, only the evidence metadata gets more precise.
+            relation_type, correlation_mode = "RECEIVES_FROM", "MESSAGING_PROCESS"
         else:
             continue
 
@@ -444,6 +571,7 @@ def correlate_queue_observations(
             observation_count=1,
             sample_trace_ids=[span.trace_id],
             service_version=span.service_version,
+            correlation_mode=correlation_mode,
         )
         facts.append(
             ObservedFactCandidate(

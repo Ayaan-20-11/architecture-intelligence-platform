@@ -15,6 +15,23 @@ class DiscoveryStatus(StrEnum):
     OBSERVED_ONLY = "OBSERVED_ONLY"
 
 
+class CorrelationMode(StrEnum):
+    """How an observed fact's evidence was derived (11H R3/spec §14) - a source of named
+    constants only; ObservedEvidence.correlation_mode itself stays a plain str, mirroring how
+    Provenance.evidence_type stays a plain str even though EvidenceType exists as a companion
+    enum. CLIENT_SERVER is the strongest signal (both sides seen, in-batch or cross-batch);
+    CLIENT_ONLY/SERVER_ONLY are partial-instrumentation signals; the three MESSAGING_* modes
+    distinguish send/receive/process even though RECEIVES_FROM covers both receive and process at
+    the relation-type level."""
+
+    CLIENT_SERVER = "CLIENT_SERVER"
+    CLIENT_ONLY = "CLIENT_ONLY"
+    SERVER_ONLY = "SERVER_ONLY"
+    MESSAGING_SEND = "MESSAGING_SEND"
+    MESSAGING_RECEIVE = "MESSAGING_RECEIVE"
+    MESSAGING_PROCESS = "MESSAGING_PROCESS"
+
+
 class RuntimeSpan(BaseModel):
     """Temporary OTLP ingestion model (spec §10) - never persisted to Neo4j. Decoded from a raw
     OTLP/HTTP export by app.telemetry.otlp_receiver; consumed and discarded by downstream

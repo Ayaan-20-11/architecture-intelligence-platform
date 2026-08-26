@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 
 import pytest
@@ -201,3 +202,81 @@ def test_cross_batch_client_and_server_in_separate_requests_produce_one_calls_re
     )
     assert response_b.status_code == 200
     assert session.run(count_query, subject_id=subject_id, object_id=object_id).single()["c"] == 1
+
+
+def _build_app_with_short_ttl_correlation_buffer(driver):
+    app = _build_app(driver)
+    app.state.http_correlation_buffer = HttpCorrelationBuffer(
+        ttl_seconds=1, max_pending_spans=10000
+    )
+    return app
+
+
+@pytest.fixture
+def client_with_short_ttl_buffer(driver):
+    return TestClient(_build_app_with_short_ttl_correlation_buffer(driver))
+
+
+def test_client_only_observation_produces_a_calls_relation_after_ttl_expiry(
+    client_with_short_ttl_buffer, session
+):
+    # 11H-C / I3: a CLIENT span with a stable target identity (peer.service) and no SERVER span
+    # ever arriving must still, once its TTL expires, produce an observed CALLS candidate.
+    client_span_id = bytes.fromhex("aa11bb22cc33dd44")
+    trace_id = bytes.fromhex("5cf93f3577b34da6a3ce929d0e0e4737")
+    resource = Resource(
+        attributes=[
+            KeyValue(key="service.name", value=AnyValue(string_value="OrderService")),
+            KeyValue(key="deployment.environment.name", value=AnyValue(string_value="production")),
+        ]
+    )
+    span = Span(
+        trace_id=trace_id,
+        span_id=client_span_id,
+        name="GET /catalog/{id}",
+        kind=Span.SPAN_KIND_CLIENT,
+        start_time_unix_nano=1_700_000_000_000_000_000,
+        end_time_unix_nano=1_700_000_000_050_000_000,
+        attributes=[
+            KeyValue(key="http.request.method", value=AnyValue(string_value="GET")),
+            KeyValue(key="http.route", value=AnyValue(string_value="/catalog/{id}")),
+            KeyValue(key="peer.service", value=AnyValue(string_value="CatalogService")),
+        ],
+    )
+    payload = ExportTraceServiceRequest(
+        resource_spans=[ResourceSpans(resource=resource, scope_spans=[ScopeSpans(spans=[span])])]
+    ).SerializeToString()
+
+    subject_id = ids.service_id("order-service")
+    object_id = ids.operation_id(ids.service_id("catalogservice"), "GET", "/catalog/{id}")
+    count_query = "MATCH (a {id: $subject_id})-[r:CALLS]->(b {id: $object_id}) RETURN count(r) AS c"
+
+    response_a = client_with_short_ttl_buffer.post(
+        "/v1/traces", content=payload, headers={"content-type": _CONTENT_TYPE}
+    )
+    assert response_a.status_code == 200
+    assert session.run(count_query, subject_id=subject_id, object_id=object_id).single()["c"] == 0
+
+    time.sleep(1.2)  # past the 1-second TTL
+
+    # Any subsequent POST triggers the buffer's sweep_expired() - an empty/unrelated batch is
+    # enough (spec §17/11H-C: nothing about this second request itself needs to reference the
+    # expired CLIENT span).
+    empty_response = client_with_short_ttl_buffer.post(
+        "/v1/traces",
+        content=ExportTraceServiceRequest().SerializeToString(),
+        headers={"content-type": _CONTENT_TYPE},
+    )
+    assert empty_response.status_code == 200
+
+    record = session.run(
+        "MATCH (a {id: $subject_id})-[r:CALLS]->(b {id: $object_id}) RETURN r.evidence_ids AS ids",
+        subject_id=subject_id,
+        object_id=object_id,
+    ).single()
+    assert record is not None
+    evidence = session.run(
+        "MATCH (e:Evidence {id: $id}) RETURN e.correlation_mode AS correlation_mode",
+        id=record["ids"][-1],
+    ).single()
+    assert evidence["correlation_mode"] == "CLIENT_ONLY"

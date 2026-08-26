@@ -57,15 +57,34 @@ class HttpCorrelationBuffer:
         self.expirations = 0
         self.evictions = 0
 
-    def _evict_expired_locked(
+    def _pop_expired_locked(
         self, store: "OrderedDict[tuple[str, str], tuple[PendingHttpSpan, datetime]]", now: datetime
-    ) -> None:
+    ) -> list[PendingHttpSpan]:
+        expired = []
         while store:
-            _, (_, inserted_at) = next(iter(store.items()))
+            _, (span, inserted_at) = next(iter(store.items()))
             if now - inserted_at <= self._ttl:
                 break
             store.popitem(last=False)
             self.expirations += 1
+            expired.append(span)
+        return expired
+
+    def _evict_expired_locked(
+        self, store: "OrderedDict[tuple[str, str], tuple[PendingHttpSpan, datetime]]", now: datetime
+    ) -> None:
+        self._pop_expired_locked(store, now)
+
+    def sweep_expired(self) -> tuple[list[PendingHttpSpan], list[PendingHttpSpan]]:
+        """Evicts and returns (expired_clients, expired_servers) - TTL-expired entries a caller
+        should now treat as CLIENT_ONLY/SERVER_ONLY candidates (11H-C/spec §7) rather than
+        silently discarding. Safe to call every request; entries already popped by a prior sweep
+        or by offer_*() are simply absent from the result."""
+        now = datetime.now(UTC)
+        with self._lock:
+            expired_clients = self._pop_expired_locked(self._pending_clients, now)
+            expired_servers = self._pop_expired_locked(self._pending_servers, now)
+        return expired_clients, expired_servers
 
     def _enforce_bound_locked(
         self, store: "OrderedDict[tuple[str, str], tuple[PendingHttpSpan, datetime]]"

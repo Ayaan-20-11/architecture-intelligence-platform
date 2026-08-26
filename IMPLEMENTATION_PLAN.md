@@ -881,6 +881,81 @@ reconciliation) is already committed.
   second — targeting an undeclared `OrderService -> ReviewService` pair distinct from the module's other
   test's declared relation, since this test module has no per-test Neo4j reset.
 
+## Iteration 11H-C — Partial Instrumentation / Single-Sided HTTP Observation (Runtime Correctness & Robustness)
+`Architecture_Intelligence_Platform_11H_Runtime_Correctness_Robustness_Specification.md` R3/§7/§14/§17,
+§19 (I3), acceptance criteria 11H.6/11H.7/11H.8/11H.14. **Exit criterion:** a CLIENT span with a stable,
+resolvable target service identity produces an observed `CALLS` candidate even with no SERVER span ever
+arriving; a SERVER span alone never invents a caller; ambiguous/incomplete cases stay
+`UnresolvedObservation`, never guessed. Third of six 11H sub-iterations; 11H-A (evidence reconciliation,
+`12a7a0d`) and 11H-B (cross-batch correlation buffer, `e2da3ef`) are already committed.
+
+- **A real design gap surfaced re-verifying the plan against 11H-B's actual code, before writing any new
+  code**: `_pending_span_from_client` extracted no `method`/`route`/target-identity from a CLIENT span at
+  all, since the paired/cross-batch `CALLS` path always sources those from the SERVER side (H4.6).
+  CLIENT_ONLY has no SERVER side to source from — the CLIENT span's own attributes are the *only* place
+  spec §7.2's method/route/target-identity can come from, so this iteration extends
+  `_pending_span_from_client` to also read them (harmless/inert for the existing `CLIENT_SERVER` paths,
+  which never read these fields back off a matched client).
+- `app/telemetry/semconv/http.py` — new `PEER_SERVICE = "peer.service"`, the **sole** allowlisted way to
+  resolve a CLIENT-only call's target service identity (spec §7.5: never guess from `server.address`/an
+  IP alone).
+- `app/telemetry/correlation_buffer.py` — new `sweep_expired()` (returns `(expired_clients,
+  expired_servers)` instead of silently discarding what ages out — `_evict_expired_locked` is now a thin
+  wrapper around the same underlying `_pop_expired_locked`, so `offer_server`/`offer_client`'s existing
+  pre-match housekeeping and all of 11H-B's tests are unaffected). `correlate_http_call_observations` calls
+  it once, at the very start, before processing this batch's own leftover spans.
+- `app/telemetry/adapter.py` — CLIENT_ONLY emission (spec §7.2): for each expired CLIENT span, resolves
+  caller identity via `resolve_service()`, requires `method`+`route` present (else `CORRELATION_EXPIRED`),
+  requires `target_identity` (`peer.service`) present (else `MISSING_TARGET_IDENTITY`), requires
+  `environment` present (else `NO_ENVIRONMENT`), then resolves the target the same way and builds a
+  `CALLS` fact with `correlation_mode="CLIENT_ONLY"`. SERVER_ONLY (spec §7.3): every SERVER
+  `PendingHttpSpan` the buffer stores was already validated (environment/method/route present) before
+  being offered, so the *only* thing a SERVER_ONLY case can lack is the caller — which nothing in this
+  codebase's current semconv allowlist can identify from a SERVER span alone — so this always reports
+  `MISSING_CALLER_IDENTITY`, satisfying 11H.8 as a real, tested structural guarantee rather than an
+  accident of missing data. New `MISSING_TARGET_IDENTITY`/`MISSING_CALLER_IDENTITY`/`CORRELATION_EXPIRED`
+  reason constants (spec §17 lists three more with an "extend as needed" framing; not added since none has
+  a concrete trigger site yet — `NO_STABLE_ROUTE` already covers route instability). Messaging retrofit in
+  `correlate_queue_observations`: `receive`/`process` both still map to `RECEIVES_FROM` at the
+  relation-type level (unchanged) but now carry distinct `MESSAGING_RECEIVE`/`MESSAGING_PROCESS`
+  `correlation_mode` values, alongside `MESSAGING_SEND` for the send path — every `ObservedFactCandidate`
+  in the system now gets a populated `correlation_mode`, not just the HTTP ones.
+- `app/telemetry/model.py` — new `CorrelationMode(StrEnum)`: `CLIENT_SERVER`/`CLIENT_ONLY`/`SERVER_ONLY`/
+  `MESSAGING_SEND`/`MESSAGING_RECEIVE`/`MESSAGING_PROCESS` — a source of named constants only, matching
+  how `Provenance.evidence_type` stays a plain `str` even with `EvidenceType` as a companion enum.
+  `app/provenance/model.py::ObservedEvidence` gains `correlation_mode: str | None = None` — **optional**,
+  not required, so every pre-11H-C construction site across `test_adapter.py`/`test_runtime_analysis.py`/
+  `test_aggregator.py`/`test_importer.py`/`test_telemetry_api.py` keeps working unmodified. Not duplicated
+  onto `ObservedFactCandidate` itself — `fact.evidence.correlation_mode` is the one source of truth.
+- `app/telemetry/aggregator.py` — `merge_evidence` now keeps the *stronger* of two differing
+  `correlation_mode`s on the same bucket (spec §14: "preserve the strongest mode"), via a small
+  `_CORRELATION_MODE_STRENGTH` ordering (`CLIENT_SERVER` > `CLIENT_ONLY`/`SERVER_ONLY` >
+  `MESSAGING_*` > `None`). `_READ_EVIDENCE_QUERY` gains the new column.
+- Explicitly deferred, corrected from the original roadmap sketch written before 11H-B existed: that
+  sketch proposed a SERVER_ONLY case emitting a one-sided `PROVIDES` fact via "11H-D's mechanism" — 11H-D
+  is not implemented yet, so there's no such mechanism to hook into; revisit specifically when 11H-D
+  lands. Also deferred: full read-stack exposure of `correlation_mode` (API/UI — none of 11H.6/11H.7/
+  11H.8 name a response shape, and spec §21 only requires new metadata be "backward-compatible where
+  practical"); the `UNSTABLE_HTTP_ROUTE`/`AMBIGUOUS_SERVICE`/`UNSUPPORTED_SPAN` reason codes (no concrete
+  trigger site yet); `server.address`/`server.port`-based target resolution (spec §7.5 forbids guessing
+  from network identifiers alone).
+- 14 new tests (342 unit / 125 integration, up from 329/124): buffer `sweep_expired()` tests (returns and
+  clears only genuinely-expired entries, idempotent, reports both clients and servers); adapter tests for
+  `correlation_mode == "CLIENT_SERVER"` on both in-batch and cross-batch-matched pairs, CLIENT_ONLY's four
+  branches (`peer.service` present → fact; absent → `MISSING_TARGET_IDENTITY`; no method/route at all →
+  `CORRELATION_EXPIRED`; no environment → `NO_ENVIRONMENT`), and SERVER_ONLY always reporting
+  `MISSING_CALLER_IDENTITY` while still recording the provider as an observed-only entity; `correlation_mode`
+  assertions added to the existing SEND/RECEIVE/PROCESS messaging tests; aggregator strength-ordering merge
+  tests (existing-stronger, seed-stronger, `None`-vs-real-mode in both directions); a new Testcontainers
+  integration test (I3) using a short-TTL buffer, a real `time.sleep` past the TTL, and a second unrelated
+  `POST /v1/traces` to trigger `sweep_expired()`, asserting a real, persisted `CALLS` relation with
+  `correlation_mode = "CLIENT_ONLY"`. One test-authoring bug self-caught before landing: the first draft of
+  the CLIENT_ONLY unit tests reused `_client_server_pair()`'s fixture helper, whose `**kwargs` only ever
+  applied to the SERVER half — fixed by constructing the CLIENT span directly via `_span(...)`. A second,
+  identical-shaped bug in the integration test (the new CLIENT-only span's resource was missing
+  `deployment.environment.name` entirely) was caught the same way, by reading the resulting
+  `NO_ENVIRONMENT` unresolved reason rather than assuming the feature itself was broken.
+
 ## Getting started
 
 Iterations 0 and 1 need no Neo4j/Docker and can start immediately:

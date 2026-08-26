@@ -42,3 +42,6 @@ class ObservedEvidence(Provenance):
     observation_count: int
     sample_trace_ids: list[str] = Field(default_factory=list)
     service_version: str | None = None
+    # How this evidence was derived (11H R3/spec §14 - see app.telemetry.model.CorrelationMode for
+    # the allowed values). Optional so pre-11H-C construction sites keep working unmodified.
+    correlation_mode: str | None = None
