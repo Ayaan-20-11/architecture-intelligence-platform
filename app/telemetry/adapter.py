@@ -1,3 +1,5 @@
+from typing import Literal
+
 from app.canonical import ids
 from app.provenance.model import ObservedEvidence
 from app.telemetry.model import (
@@ -10,15 +12,18 @@ from app.telemetry.model import (
     day_bucket,
 )
 from app.telemetry.operation_resolver import DeclaredOperationCandidate, resolve_operation
+from app.telemetry.queue_resolver import DeclaredQueueCandidate, resolve_queue
 from app.telemetry.semconv.http import HTTP_REQUEST_METHOD, HTTP_ROUTE, URL_TEMPLATE
-from app.telemetry.service_resolver import (
-    DeclaredServiceCandidate,
-    ResolvedObservation,
-    resolve_runtime_span,
+from app.telemetry.semconv.messaging import (
+    MESSAGING_DESTINATION_NAME,
+    MESSAGING_OPERATION_TYPE,
+    MESSAGING_SYSTEM,
 )
+from app.telemetry.service_resolver import DeclaredServiceCandidate, resolve_runtime_span
 
 NO_ENVIRONMENT = "no_environment"
 NO_STABLE_ROUTE = "no_stable_route"
+NO_DESTINATION_NAME = "no_destination_name"
 
 
 def _find_correlated_pairs(spans: list[RuntimeSpan]) -> list[tuple[RuntimeSpan, RuntimeSpan]]:
@@ -37,12 +42,15 @@ def _find_correlated_pairs(spans: list[RuntimeSpan]) -> list[tuple[RuntimeSpan, 
 
 
 def _record_if_observed_only(
-    entities: dict[str, ObservedOnlyEntity], resolution: ResolvedObservation, *, name: str
+    entities: dict[str, ObservedOnlyEntity],
+    *,
+    entity_id: str,
+    discovery_status: DiscoveryStatus,
+    label: Literal["Service", "Operation", "Queue"],
+    name: str,
 ) -> None:
-    if resolution.discovery_status == DiscoveryStatus.OBSERVED_ONLY:
-        entities[resolution.service_id] = ObservedOnlyEntity(
-            id=resolution.service_id, label="Service", name=name
-        )
+    if discovery_status == DiscoveryStatus.OBSERVED_ONLY:
+        entities[entity_id] = ObservedOnlyEntity(id=entity_id, label=label, name=name)
 
 
 def correlate_http_call_observations(
@@ -74,8 +82,20 @@ def correlate_http_call_observations(
     for client, server in _find_correlated_pairs(spans):
         caller = resolve_runtime_span(service_candidates, client, aliases=service_aliases)
         provider = resolve_runtime_span(service_candidates, server, aliases=service_aliases)
-        _record_if_observed_only(entities, caller, name=client.service_name)
-        _record_if_observed_only(entities, provider, name=server.service_name)
+        _record_if_observed_only(
+            entities,
+            entity_id=caller.service_id,
+            discovery_status=caller.discovery_status,
+            label="Service",
+            name=client.service_name,
+        )
+        _record_if_observed_only(
+            entities,
+            entity_id=provider.service_id,
+            discovery_status=provider.discovery_status,
+            label="Service",
+            name=server.service_name,
+        )
 
         if not server.environment:
             # Never guess an environment - a fabricated placeholder could quietly pollute a later
@@ -104,10 +124,13 @@ def correlate_http_call_observations(
                 UnresolvedObservation(trace_id=server.trace_id, reason=NO_STABLE_ROUTE)
             )
             continue
-        if operation.discovery_status == DiscoveryStatus.OBSERVED_ONLY:
-            entities[operation.operation_id] = ObservedOnlyEntity(
-                id=operation.operation_id, label="Operation", name=f"{method} {route}"
-            )
+        _record_if_observed_only(
+            entities,
+            entity_id=operation.operation_id,
+            discovery_status=operation.discovery_status,
+            label="Operation",
+            name=f"{method} {route}",
+        )
 
         timestamp = server.end_time
         bucket_start, bucket_end = day_bucket(timestamp)
@@ -139,3 +162,145 @@ def correlate_http_call_observations(
         )
 
     return ObservationBatch(entities=list(entities.values()), facts=facts, unresolved=unresolved)
+
+
+def correlate_queue_observations(
+    spans: list[RuntimeSpan],
+    *,
+    service_candidates: list[DeclaredServiceCandidate],
+    queue_candidates: list[DeclaredQueueCandidate],
+    service_aliases: dict[str, str],
+    queue_aliases: dict[str, str],
+) -> ObservationBatch:
+    """Builds observed SENDS/RECEIVES_FROM facts from messaging spans (spec §24-26). Unlike HTTP,
+    no correlation between spans is needed - SENDS/RECEIVES_FROM are independent relations, each
+    derivable from a single span alone (spec §24's existing graph model already treats them this
+    way).
+
+    Classification keys exclusively off messaging.operation.type (spec §25/§26's own literal
+    examples never mention span_kind, and messaging.operation.type exists in real OTel semantic
+    conventions specifically because span_kind is too coarse to disambiguate "receive" from
+    "process"). A span with no recognized operation.type is not a candidate observation at all and
+    is silently skipped, not reported as unresolved - the same status as an INTERNAL-kind span in
+    the HTTP path.
+    """
+    facts: list[ObservedFactCandidate] = []
+    entities: dict[str, ObservedOnlyEntity] = {}
+    unresolved: list[UnresolvedObservation] = []
+
+    for span in spans:
+        operation_type = (span.attributes.get(MESSAGING_OPERATION_TYPE) or "").lower()
+        if operation_type == "send":
+            relation_type = "SENDS"
+        elif operation_type in ("receive", "process"):
+            relation_type = "RECEIVES_FROM"
+        else:
+            continue
+
+        destination_name = span.attributes.get(MESSAGING_DESTINATION_NAME)
+        if not destination_name:
+            unresolved.append(
+                UnresolvedObservation(trace_id=span.trace_id, reason=NO_DESTINATION_NAME)
+            )
+            continue
+
+        if not span.environment:
+            unresolved.append(UnresolvedObservation(trace_id=span.trace_id, reason=NO_ENVIRONMENT))
+            continue
+
+        service = resolve_runtime_span(service_candidates, span, aliases=service_aliases)
+        _record_if_observed_only(
+            entities,
+            entity_id=service.service_id,
+            discovery_status=service.discovery_status,
+            label="Service",
+            name=span.service_name,
+        )
+
+        messaging_system = span.attributes.get(MESSAGING_SYSTEM)
+        queue = resolve_queue(
+            queue_candidates,
+            messaging_system=messaging_system,
+            destination_name=destination_name,
+            aliases=queue_aliases,
+        )
+        _record_if_observed_only(
+            entities,
+            entity_id=queue.queue_id,
+            discovery_status=queue.discovery_status,
+            label="Queue",
+            name=destination_name,
+        )
+
+        timestamp = span.end_time
+        bucket_start, bucket_end = day_bucket(timestamp)
+        evidence_id = ids.observed_evidence_id(
+            span.environment, bucket_start, service.service_id, relation_type, queue.queue_id
+        )
+        evidence = ObservedEvidence(
+            id=evidence_id,
+            environment=span.environment,
+            bucket_start=bucket_start,
+            bucket_end=bucket_end,
+            first_seen=timestamp,
+            last_seen=timestamp,
+            observation_count=1,
+            sample_trace_ids=[span.trace_id],
+            service_version=span.service_version,
+        )
+        facts.append(
+            ObservedFactCandidate(
+                subject_id=service.service_id,
+                relation_type=relation_type,
+                object_id=queue.queue_id,
+                environment=span.environment,
+                timestamp=timestamp,
+                trace_id=span.trace_id,
+                source_service_version=span.service_version,
+                evidence=evidence,
+            )
+        )
+
+    return ObservationBatch(entities=list(entities.values()), facts=facts, unresolved=unresolved)
+
+
+def adapt(
+    spans: list[RuntimeSpan],
+    *,
+    service_candidates: list[DeclaredServiceCandidate],
+    operation_candidates: list[DeclaredOperationCandidate],
+    queue_candidates: list[DeclaredQueueCandidate],
+    service_aliases: dict[str, str],
+    queue_aliases: dict[str, str],
+) -> ObservationBatch:
+    """Combines HTTP and queue observations from one decoded OTLP batch into a single
+    ObservationBatch (spec §9's OpenTelemetryAdapter stage).
+
+    Deliberately narrower than the `adapt(raw_bytes)` shape noted as deferred in Iteration 11C's
+    plan - still takes an already-decoded list[RuntimeSpan], not raw OTLP bytes. Composing
+    decode-then-adapt, and wiring any of this into POST /v1/traces, is deferred further to
+    whichever iteration first needs it (11E at the earliest, once there's something to persist).
+    """
+    http_batch = correlate_http_call_observations(
+        spans,
+        service_candidates=service_candidates,
+        operation_candidates=operation_candidates,
+        service_aliases=service_aliases,
+    )
+    queue_batch = correlate_queue_observations(
+        spans,
+        service_candidates=service_candidates,
+        queue_candidates=queue_candidates,
+        service_aliases=service_aliases,
+        queue_aliases=queue_aliases,
+    )
+
+    entities: dict[str, ObservedOnlyEntity] = {}
+    for entity in [*http_batch.entities, *queue_batch.entities]:
+        entities[entity.id] = entity
+
+    return ObservationBatch(
+        entities=list(entities.values()),
+        facts=[*http_batch.facts, *queue_batch.facts],
+        unresolved=[*http_batch.unresolved, *queue_batch.unresolved],
+    )

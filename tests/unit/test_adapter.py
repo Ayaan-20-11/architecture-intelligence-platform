@@ -1,8 +1,16 @@
 from datetime import UTC, datetime
 
-from app.telemetry.adapter import NO_ENVIRONMENT, NO_STABLE_ROUTE, correlate_http_call_observations
+from app.telemetry.adapter import (
+    NO_DESTINATION_NAME,
+    NO_ENVIRONMENT,
+    NO_STABLE_ROUTE,
+    adapt,
+    correlate_http_call_observations,
+    correlate_queue_observations,
+)
 from app.telemetry.model import RuntimeSpan
 from app.telemetry.operation_resolver import DeclaredOperationCandidate
+from app.telemetry.queue_resolver import DeclaredQueueCandidate
 from app.telemetry.service_resolver import DeclaredServiceCandidate
 
 ORDER_SERVICE = DeclaredServiceCandidate(
@@ -20,6 +28,9 @@ GET_PRODUCT = DeclaredOperationCandidate(
     path="/products/{id}",
 )
 OPERATION_CANDIDATES = [GET_PRODUCT]
+
+PAYMENT_Q = DeclaredQueueCandidate(id="queue:payment-q", name="payment-q", namespace=None)
+QUEUE_CANDIDATES = [PAYMENT_Q]
 
 
 def _span(**overrides) -> RuntimeSpan:
@@ -194,3 +205,154 @@ def test_observed_only_entities_are_deduplicated_across_pairs():
     batch = _correlate([client_a, server_a, client_b, server_b])
     service_entities = [e for e in batch.entities if e.label == "Service"]
     assert len(service_entities) == 1
+
+
+# --- correlate_queue_observations ---------------------------------------------------------------
+
+
+def _queue_correlate(spans, **kwargs):
+    return correlate_queue_observations(
+        spans,
+        service_candidates=kwargs.get("service_candidates", SERVICE_CANDIDATES),
+        queue_candidates=kwargs.get("queue_candidates", QUEUE_CANDIDATES),
+        service_aliases=kwargs.get("service_aliases", {}),
+        queue_aliases=kwargs.get("queue_aliases", {}),
+    )
+
+
+def test_send_span_produces_sends_fact():
+    span = _span(
+        service_name="OrderService",
+        attributes={
+            "messaging.system": "azure.servicebus",
+            "messaging.operation.type": "send",
+            "messaging.destination.name": "payment-q",
+        },
+    )
+    batch = _queue_correlate([span])
+    assert len(batch.facts) == 1
+    fact = batch.facts[0]
+    assert fact.subject_id == "service:order-service"
+    assert fact.relation_type == "SENDS"
+    assert fact.object_id == "queue:payment-q"
+    assert batch.unresolved == []
+
+
+def test_receive_span_produces_receives_from_fact():
+    span = _span(
+        service_name="PaymentService",
+        attributes={
+            "messaging.operation.type": "receive",
+            "messaging.destination.name": "payment-q",
+        },
+    )
+    batch = _queue_correlate([span])
+    assert batch.facts[0].relation_type == "RECEIVES_FROM"
+
+
+def test_process_span_produces_receives_from_fact():
+    span = _span(
+        service_name="PaymentService",
+        attributes={
+            "messaging.operation.type": "process",
+            "messaging.destination.name": "payment-q",
+        },
+    )
+    batch = _queue_correlate([span])
+    assert batch.facts[0].relation_type == "RECEIVES_FROM"
+
+
+def test_unrecognized_operation_type_is_silently_skipped():
+    span = _span(
+        attributes={"messaging.operation.type": "create", "messaging.destination.name": "payment-q"}
+    )
+    batch = _queue_correlate([span])
+    assert batch.facts == []
+    assert batch.unresolved == []
+
+
+def test_missing_operation_type_is_silently_skipped():
+    span = _span(attributes={"messaging.destination.name": "payment-q"})
+    batch = _queue_correlate([span])
+    assert batch.facts == []
+    assert batch.unresolved == []
+
+
+def test_missing_destination_name_is_unresolved():
+    span = _span(attributes={"messaging.operation.type": "send"})
+    batch = _queue_correlate([span])
+    assert batch.facts == []
+    assert [u.reason for u in batch.unresolved] == [NO_DESTINATION_NAME]
+
+
+def test_missing_environment_is_unresolved_for_queue_observations():
+    span = _span(
+        environment=None,
+        attributes={"messaging.operation.type": "send", "messaging.destination.name": "payment-q"},
+    )
+    batch = _queue_correlate([span])
+    assert batch.facts == []
+    assert [u.reason for u in batch.unresolved] == [NO_ENVIRONMENT]
+
+
+def test_observed_only_service_and_queue_are_both_recorded():
+    span = _span(
+        service_name="FraudService",
+        attributes={"messaging.operation.type": "send", "messaging.destination.name": "legacy-q"},
+    )
+    batch = _queue_correlate([span])
+    labels = {e.label for e in batch.entities}
+    assert labels == {"Service", "Queue"}
+
+
+def test_queue_evidence_matches_the_single_observation_seed_shape():
+    span = _span(
+        attributes={"messaging.operation.type": "send", "messaging.destination.name": "payment-q"}
+    )
+    fact = _queue_correlate([span]).facts[0]
+    evidence = fact.evidence
+    assert evidence.source_type == "OPENTELEMETRY"
+    assert evidence.evidence_type == "OBSERVED"
+    assert evidence.observation_count == 1
+    assert evidence.sample_trace_ids == [span.trace_id]
+
+
+# --- adapt: combines HTTP and queue observations ------------------------------------------------
+
+
+def test_adapt_combines_http_and_queue_facts():
+    client, server = _client_server_pair()
+    queue_span = _span(
+        span_id="q1" * 8,
+        service_name="OrderService",
+        attributes={"messaging.operation.type": "send", "messaging.destination.name": "payment-q"},
+    )
+    batch = adapt(
+        [client, server, queue_span],
+        service_candidates=SERVICE_CANDIDATES,
+        operation_candidates=OPERATION_CANDIDATES,
+        queue_candidates=QUEUE_CANDIDATES,
+        service_aliases={},
+        queue_aliases={},
+    )
+    relation_types = {f.relation_type for f in batch.facts}
+    assert relation_types == {"CALLS", "SENDS"}
+
+
+def test_adapt_deduplicates_entities_discovered_via_both_paths():
+    client, server = _client_server_pair(service_name="FraudService")
+    queue_span = _span(
+        span_id="q2" * 8,
+        service_name="FraudService",
+        attributes={"messaging.operation.type": "send", "messaging.destination.name": "payment-q"},
+    )
+    batch = adapt(
+        [client, server, queue_span],
+        service_candidates=SERVICE_CANDIDATES,
+        operation_candidates=OPERATION_CANDIDATES,
+        queue_candidates=QUEUE_CANDIDATES,
+        service_aliases={},
+        queue_aliases={},
+    )
+    fraud_entities = [e for e in batch.entities if e.name == "FraudService"]
+    assert len(fraud_entities) == 1

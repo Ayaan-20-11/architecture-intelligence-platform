@@ -490,6 +490,64 @@ with 11A/11B.
   product-service GET /products/{id}` operation id (direct H4.6 proof) and Fall B mints a stable
   observed-only id against real service data, both with explicit "nothing written to Neo4j" assertions.
 
+## Iteration 11D — Queue Observations (H4)
+`Architecture_Intelligence_Platform_H4_OpenTelemetry_Specification.md` §24-30, §32, §67. **Exit
+criterion:** `SENDS`/`RECEIVES_FROM` facts built from messaging spans, reusing declared AsyncAPI queues
+or minting stable observed-only ids. Unlike 11C, **no client/server correlation is needed** - spec §24
+already models `SENDS`/`RECEIVES_FROM` as independent relations, each derivable from a single span
+alone. Also fulfills 11C's own deferred note by building the combined `adapt()` orchestrator now that
+both HTTP and queue correlation exist. **No Neo4j writes** - consistent with 11A-11C.
+
+- Resolved spec §27's "broker/system instance" ambiguity: the spec's illustrative 3-segment queue id
+  doesn't match the actual, already-implemented 2-segment `ids.queue_id(name, namespace=None)`, and
+  §27's own instruction ("use the same id generator as the AsyncAPI importer") means reuse that
+  function, not invent a new scheme. §32's messaging allowlist has no distinct broker-instance
+  attribute either - only `messaging.system` (a broker type, not a specific instance) is readable, so
+  it's folded into `queue_id`'s single `namespace` parameter. Confirmed via the real fixtures:
+  `app/ingestion/asyncapi_adapter.py` derives a declared Queue's `namespace` from an unused `x-namespace`
+  vendor extension - no real `asyncapi.yaml` sets it, so every real declared `Queue.namespace` is `None`
+  today, identical to `Service.namespace` in 11B.
+- `app/telemetry/semconv/messaging.py` (new) — messaging attribute key constants (spec §32), mirroring
+  `http.py`.
+- `app/telemetry/queue_resolver.py` (new, third structural sibling of `service_resolver.py`/
+  `operation_resolver.py`) — `resolve_queue(candidates, *, messaging_system, destination_name, aliases)`:
+  a `messaging_system`-qualified exact match (dormant against today's real data, forward-compatible,
+  mirroring `service_resolver`'s own tier-1 situation), a bare-`destination_name` match (unique-match-
+  required, what actually unifies AsyncAPI-declared and OTel-observed queues today), a configured alias,
+  and observed-only minting via `ids.queue_id(destination_name, namespace=messaging_system)` (embeds
+  the system in a *freshly minted* id, unlike tier-1 matching which only checks field equality).
+- `app/telemetry/adapter.py` — **generalized `_record_if_observed_only`** from a `ResolvedObservation`-
+  specific, `label="Service"`-hardcoded helper to a fully generic `(entities, *, entity_id,
+  discovery_status, label, name)`, since `QueueResolution` has neither `.service_id` nor `.environment`
+  and literally couldn't be passed to the old signature; rerouted the existing HTTP-path Operation
+  entity-recording (previously an inline `if` block) through the same helper for consistency. New
+  `correlate_queue_observations(spans, *, service_candidates, queue_candidates, service_aliases,
+  queue_aliases) -> ObservationBatch` — no pairing step; classifies each span via
+  `messaging.operation.type` alone (never `span_kind`, matching spec §25/§26's own literal examples and
+  the fact that `messaging.operation.type` exists in real OTel semconv specifically because `span_kind`
+  is too coarse to disambiguate `receive` from `process`): `"send"` → `SENDS`, `{"receive","process"}` →
+  `RECEIVES_FROM`, anything else (including absent) → silently skipped, never reported as unresolved
+  (same status as an `INTERNAL`-kind span in the HTTP path — `unresolved` stays reserved for "recognized
+  but incomplete", not "not applicable to H4"). Missing destination name or environment produce
+  `UnresolvedObservation`s; both the resolved service and queue are recorded as `ObservedOnlyEntity` when
+  observed-only, satisfying H4.10 for the queue side the same way the HTTP path already does for
+  services/operations. New `adapt(spans, *, service_candidates, operation_candidates, queue_candidates,
+  service_aliases, queue_aliases) -> ObservationBatch` combines both correlation functions' outputs,
+  re-deduplicating entities across paths. Deliberately narrower than 11C's noted `adapt(raw_bytes)` shape
+  — still takes already-decoded spans; composing decode-then-adapt and wiring into `POST /v1/traces`
+  stays deferred to whichever iteration first needs it (11E at the earliest).
+- Explicitly deferred: wiring into `POST /v1/traces`; any Neo4j write (11E); message-type-specific facts
+  (spec §30 permanently scopes H4 to `Service -> Queue`, not just for this iteration); merging multiple
+  `ObservedEvidence` seeds into a real persisted bucket (11E).
+- 21 new tests (295 unit / 87 integration, up from 277/84): the queue resolver's four tiers plus a
+  bare-name-collision guard and graceful handling of a missing `messaging_system`; the adapter's SEND/
+  RECEIVE/PROCESS classification, silent-skip-vs-unresolved boundary, both unresolved reasons, dual
+  entity recording, and evidence-shape correctness; `adapt()` combining facts from both paths and
+  deduplicating a service discovered via both; two Testcontainers integration tests proving a send
+  observation reuses the *real* declared `payment-q` (H4.9) and an unknown destination mints a stable
+  observed-only queue against real service data (H4.10), both with explicit "nothing written to Neo4j"
+  assertions, plus a `fetch_queue_candidates` real-data check.
+
 ## Getting started
 
 Iterations 0 and 1 need no Neo4j/Docker and can start immediately:

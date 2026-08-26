@@ -6,9 +6,10 @@ from testcontainers.community.neo4j import Neo4jContainer
 
 from app.canonical import ids
 from app.graph.importer import import_all_sources
-from app.telemetry.adapter import correlate_http_call_observations
+from app.telemetry.adapter import correlate_http_call_observations, correlate_queue_observations
 from app.telemetry.model import RuntimeSpan
 from app.telemetry.operation_resolver import fetch_operation_candidates
+from app.telemetry.queue_resolver import fetch_queue_candidates
 from app.telemetry.service_resolver import fetch_candidates
 
 EXAMPLES_DIR = Path(__file__).resolve().parent.parent.parent / "examples"
@@ -118,5 +119,73 @@ def test_unknown_route_mints_observed_only_operation_against_real_service_data(s
     # nothing written to the graph - Iteration 11C stays read-only, like 11A/11B
     count = session.run(
         "MATCH (o:Operation {id: $id}) RETURN count(o) AS c", id=fact.object_id
+    ).single()["c"]
+    assert count == 0
+
+
+def test_fetch_queue_candidates_returns_declared_queues_with_no_namespace(session):
+    candidates = fetch_queue_candidates(session)
+    by_name = {c.name for c in candidates}
+    assert {"payment-q", "invoice-q", "unused-q", "unknown-producer-q"} <= by_name
+    assert all(c.namespace is None for c in candidates)
+
+
+def test_send_observation_reuses_the_real_declared_queue(session):
+    # Mirrors examples/order-service/asyncapi.yaml's real declared SENDS: order-service -> payment-q
+    # (H4.9: existing AsyncAPI queues are reused).
+    span = _span(
+        span_id="q1" * 8,
+        service_name="OrderService",
+        attributes={"messaging.operation.type": "send", "messaging.destination.name": "payment-q"},
+    )
+
+    service_candidates = fetch_candidates(session)
+    queue_candidates = fetch_queue_candidates(session)
+    batch = correlate_queue_observations(
+        [span],
+        service_candidates=service_candidates,
+        queue_candidates=queue_candidates,
+        service_aliases={},
+        queue_aliases={},
+    )
+
+    assert len(batch.facts) == 1
+    fact = batch.facts[0]
+    assert fact.subject_id == ids.service_id("order-service")
+    assert fact.relation_type == "SENDS"
+    assert fact.object_id == ids.queue_id("payment-q")
+    assert batch.entities == []
+
+
+def test_unknown_destination_mints_observed_only_queue_against_real_service_data(session):
+    span = _span(
+        span_id="q2" * 8,
+        service_name="OrderService",
+        attributes={
+            "messaging.operation.type": "send",
+            "messaging.destination.name": "legacy-payment-q",
+        },
+    )
+
+    service_candidates = fetch_candidates(session)
+    queue_candidates = fetch_queue_candidates(session)
+    batch = correlate_queue_observations(
+        [span],
+        service_candidates=service_candidates,
+        queue_candidates=queue_candidates,
+        service_aliases={},
+        queue_aliases={},
+    )
+
+    assert len(batch.facts) == 1
+    fact = batch.facts[0]
+    assert fact.object_id == ids.queue_id("legacy-payment-q")
+    queue_entities = [e for e in batch.entities if e.label == "Queue"]
+    assert len(queue_entities) == 1
+    assert queue_entities[0].id == fact.object_id
+
+    # nothing written to the graph - Iteration 11D stays read-only, like 11A-11C
+    count = session.run(
+        "MATCH (q:Queue {id: $id}) RETURN count(q) AS c", id=fact.object_id
     ).single()["c"]
     assert count == 0
