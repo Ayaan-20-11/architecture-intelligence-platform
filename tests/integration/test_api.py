@@ -282,6 +282,22 @@ def test_post_query_with_configured_provider_returns_real_answer(client_with_llm
     assert body["answer"] == "Found 4 row(s)."
 
 
+def test_post_query_with_semantically_invalid_cypher_returns_422(driver):
+    client = TestClient(
+        _build_app(
+            driver,
+            llm_provider=FakeProvider(cypher="MATCH (q:Queue)-[:SENDS]->(s:Service) RETURN q.id"),
+        )
+    )
+    response = client.post("/api/query", json={"question": "who sends to services?"})
+    assert response.status_code == 422
+    body = response.json()
+    assert body["code"] == "SEMANTIC_QUERY_INVALID"
+    assert body["relation"] == "SENDS"
+    assert body["expectedSource"] == ["Service"]
+    assert body["expectedTarget"] == ["Queue"]
+
+
 def test_ui_index_lists_services_and_queues(client):
     response = client.get("/")
     assert response.status_code == 200

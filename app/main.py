@@ -2,10 +2,11 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.ai.provider import OpenAIProvider
+from app.ai.semantic_query_validator import SemanticValidationError
 from app.api import analysis, evidence, import_api, messages, query, queues, services, ui
 from app.deps import get_driver, get_settings
 from app.graph.repository import build_driver, open_session
@@ -41,6 +42,21 @@ def create_app() -> FastAPI:
     app.include_router(query.router)
     app.include_router(evidence.router)
     app.include_router(ui.router)
+
+    @app.exception_handler(SemanticValidationError)
+    def handle_semantic_validation_error(request: Request, exc: SemanticValidationError):
+        """Spec §5.10: structurally invalid generated Cypher (e.g. wrong relationship direction)
+        never reaches Neo4j and is reported as 422 with the violated relation's domain/range."""
+        return JSONResponse(
+            status_code=422,
+            content={
+                "code": "SEMANTIC_QUERY_INVALID",
+                "message": str(exc),
+                "relation": exc.relation,
+                "expectedSource": sorted(exc.expected_source),
+                "expectedTarget": sorted(exc.expected_target),
+            },
+        )
 
     @app.get("/health")
     def health() -> dict:

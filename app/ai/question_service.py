@@ -6,6 +6,7 @@ from app.ai.answer_composer import compose_answer
 from app.ai.cypher_generator import generate_cypher
 from app.ai.cypher_validator import DEFAULT_MAX_DEPTH, DEFAULT_MAX_RESULT_ROWS, validate_cypher
 from app.ai.provider import LLMProvider
+from app.ai.semantic_query_validator import SemanticQueryValidator
 from app.graph.repository import open_session
 
 
@@ -18,7 +19,8 @@ class AnswerResult:
 
 
 class ArchitectureQuestionService:
-    """Orchestrates generate -> validate -> read-only execute -> compose (spec §15)."""
+    """Orchestrates generate -> security-validate -> semantic-validate -> read-only execute ->
+    compose (spec §15, hardening spec §5.4)."""
 
     def __init__(
         self,
@@ -34,12 +36,14 @@ class ArchitectureQuestionService:
         self._provider = provider
         self._max_depth = max_depth
         self._max_result_rows = max_result_rows
+        self._semantic_validator = SemanticQueryValidator()
 
     def ask(self, question: str) -> AnswerResult:
         candidate_cypher = generate_cypher(self._provider, question)
         cypher = validate_cypher(
             candidate_cypher, max_depth=self._max_depth, max_result_rows=self._max_result_rows
         )
+        self._semantic_validator.validate(cypher)
 
         with open_session(self._driver, database=self._database, read_only=True) as session:
             rows = [record.data() for record in session.run(cypher)]

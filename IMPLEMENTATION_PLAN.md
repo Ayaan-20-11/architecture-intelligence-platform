@@ -223,6 +223,56 @@ three sub-projects (H1 Evidence, H2 Semantic Validator, H3 Intent Router); built
   Testcontainers test proving the same relation accumulates evidence from two independently-importing
   services and correctly loses just one contributor's evidence on that service's reimport.
 
+## Iteration 10B — Graph Schema + Semantic Query Validator (H2)
+`Architecture_Intelligence_Platform_Core_Hardening_Specification.md` §5. **Exit criterion:** the live
+Iteration 9 failure — the LLM generating syntactically valid, security-validator-passing Cypher with a
+relationship's direction backwards (`(q:Queue)-[:SENDS]->(s:Service)`) — is caught before it reaches
+Neo4j. Second of the hardening spec's three sub-projects, built alone after H1 per the spec's own
+"don't implement in parallel" guidance; H3 (Intent Router) remains a separate future iteration.
+
+- `app/graph_schema/model.py` — `RelationDefinition(name, source_labels: frozenset[str],
+  target_labels: frozenset[str])`. `frozenset` instead of the spec's literal `set[str]`, matching
+  `app/graph/reconciliation.py`'s existing frozenset-for-registry/set-for-working-values distinction.
+- `app/graph_schema/registry.py` — `RELATIONS: dict[str, RelationDefinition]` for all 9 known relation
+  types (spec §5.3's table).
+- `app/ai/semantic_query_validator.py` (new) — co-located with `cypher_validator.py`, not the
+  pre-existing `app/validation/` package (which holds ingestion-pipeline model validation, a different
+  concern). `SemanticQueryValidator.validate(cypher)` and `SemanticValidationError` (carrying
+  `relation`/`expected_source`/`expected_target`/`actual_source`/`actual_target`, spec §5.9/§5.10).
+  Implementation is a hand-written depth-counting tokenizer (spec §5.8 Variante A — no Cypher-parser
+  dependency exists or is needed, since the LLM's permitted subset is already hard-restricted by
+  `cypher_generator.py`'s prompt): balanced-bracket scanning for node `(...)` and relationship
+  `-[...]->`/`<-[...]-`/`-[...]-` patterns (handles nested parens in property maps, e.g.
+  `{id: toLower($id)}`, which a flat regex cannot), a global variable→labels symbol table (resolves
+  alias reuse across separate `MATCH` clauses and correlated `EXISTS {...}` subqueries), adjacency-based
+  chain grouping (multiple `MATCH`/`OPTIONAL MATCH` blocks fall out for free), and domain/range checking
+  per relationship-chain triple. An unknown relation type in a `TYPE1|TYPE2` alternation is rejected
+  unconditionally (AC-H2-4); domain/range compatibility across an alternation is OR'd (valid if any
+  known alternative matches, since that's what the alternation means at query time), and an undirected
+  `-[...]-` pattern is checked against either orientation (matching Neo4j's own undirected semantics). A
+  label the validator can't resolve (never stated on that variable anywhere in the query) is treated
+  permissively — the validator judges schema-correctness, not answer-completeness (spec §5.7).
+- `app/ai/question_service.py::ArchitectureQuestionService` — constructs a `SemanticQueryValidator()`
+  in `__init__` (no injectable kwarg: unlike `max_depth`/`max_result_rows`, it's stateless and has no
+  per-deployment configuration) and calls `.validate(cypher)` in `ask()` right after the existing
+  security `validate_cypher(...)` and before the read-only Neo4j session opens.
+- `app/main.py::create_app()` — `@app.exception_handler(SemanticValidationError)` returning HTTP 422
+  with the spec §5.10 JSON body (`code: SEMANTIC_QUERY_INVALID`, `message`, `relation`,
+  `expectedSource`, `expectedTarget`). Applies globally, so it also converts an otherwise-unhandled
+  error on the HTML `/query` page into the same JSON body — a pre-existing gap shared with
+  `CypherValidationError`, not fixed for either validator in this iteration.
+- Explicitly deferred: the optional dev-only `POST /api/debug/validate-cypher` endpoint (spec §5.9
+  marks it optional; not needed for any AC-H2 criterion).
+- 37 new tests (185 unit / 66 integration, up from 150/64): the spec §5.11 valid/invalid table, the
+  exact AC-H2-2 live-test regression, unknown-relation-type rejection (independent of the security
+  validator per AC-H2-5), permissive handling of unresolvable labels, alias reuse across `MATCH`
+  clauses and a correlated `EXISTS` subquery, `OPTIONAL MATCH`, variable-length traversal, the real
+  multi-hop/anonymous-node/property-map shape from `app/analysis/blast_radius.py`, nested-parens-in-
+  property-map (pinning the balanced-bracket-scanner fix over a flat regex), alternation OR-semantics,
+  a graph-schema-registry drift check against `KNOWN_RELATION_TYPES`, an `ArchitectureQuestionService`
+  Testcontainers test proving a semantically invalid query never reaches the graph, and an end-to-end
+  FastAPI test asserting the 422 body shape through `POST /api/query`.
+
 ## Getting started
 
 Iterations 0 and 1 need no Neo4j/Docker and can start immediately:

@@ -74,6 +74,23 @@ def test_ask_rejects_generated_cypher_that_violates_the_validator(driver):
     assert count == 4
 
 
+def test_ask_rejects_semantically_invalid_generated_cypher(driver):
+    # H2 regression: the live-test failure where the LLM generated a syntactically valid,
+    # security-validator-passing query with the SENDS relationship backwards.
+    provider = FakeProvider(cypher="MATCH (q:Queue)-[:SENDS]->(s:Service) RETURN q.id AS id")
+    service = ArchitectureQuestionService(driver=driver, database=DATABASE, provider=provider)
+
+    from app.ai.semantic_query_validator import SemanticValidationError
+
+    with pytest.raises(SemanticValidationError):
+        service.ask("who sends to services?")
+
+    # nothing was executed - the graph is untouched
+    with driver.session(database=DATABASE) as session:
+        count = session.run("MATCH (n:Service) RETURN count(n) AS c").single()["c"]
+    assert count == 4
+
+
 def test_ask_uses_read_only_session_rejecting_writes_even_if_validator_were_bypassed(driver):
     # Defense in depth: even a validated-but-hypothetically-malicious write attempt must not
     # reach the graph, because ask() executes over a read-only session (spec §19).
