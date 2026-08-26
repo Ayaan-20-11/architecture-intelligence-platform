@@ -1021,6 +1021,66 @@ reconciles onto the *same* Operation node, never a duplicate. Fourth of six 11H 
   spec §7.3, so there is no `CALLS`-fact code path to attach a `PROVIDES` fact to the way this iteration's
   mechanism assumes; revisit only if a future iteration gives SERVER_ONLY its own fact-emission path).
 
+## Iteration 11H-E — Coverage Qualification for Negative Findings (Runtime Correctness & Robustness)
+`Architecture_Intelligence_Platform_11H_Runtime_Correctness_Robustness_Specification.md` R7/§11,
+acceptance criteria 11H.11/11H.12. **Exit criterion:** an O4 `NOT_OBSERVED_IN_WINDOW` result can expose a
+qualitative `SUFFICIENT`/`PARTIAL`/`NONE`/`UNKNOWN` coverage classification (no numeric confidence score,
+per spec §11.2), so a caller can tell "we watched for this and didn't see it" apart from "we have no idea
+whether we'd have seen it" — without ever implying `obsolete`/`unused`/`dead` (11H.12, already enforced,
+re-verified unchanged). Fifth of six 11H sub-iterations; 11H-A/B/C/D (`12a7a0d`/`e2da3ef`/`d9c513a`/
+`0559509`) are already committed.
+
+- `app/analysis/runtime.py` — new `COVERAGE_SUFFICIENT`/`COVERAGE_PARTIAL`/`COVERAGE_NONE`/
+  `COVERAGE_UNKNOWN` string constants (matching this file's existing plain-constant style, e.g.
+  `NOT_OBSERVED_IN_WINDOW`) and `_classify_coverage(service_coverage, relation_type, *,
+  qualification_enabled)`, derived entirely from O5's already-computed per-service `http_observed`/
+  `messaging_observed`/`spans_observed` signals — no new Cypher. `SUFFICIENT` when the service has observed
+  traffic of the *same* relation kind as the not-observed row (`CALLS` → `http_observed`,
+  `SENDS`/`RECEIVES_FROM` → `messaging_observed`) in this window/environment; `PARTIAL` when it emits some
+  telemetry but not of that kind; `NONE` when it emitted no usable telemetry at all (spec §11.1's Case B);
+  `UNKNOWN` when qualification is disabled or there's no coverage row for the subject at all. `coverage:
+  str` added to `DeclaredOnlyRelation`/`RuntimeRelationStatus` alongside the existing
+  `telemetry_coverage_available: bool` (kept, unchanged semantics — additive, backward-compatible per spec
+  §21). `declared_only_relations()`/`service_runtime_profile()` gain an optional `qualification_enabled:
+  bool = True` parameter (spec §22's `telemetry.coverage.qualification-enabled` kill switch).
+- `app/settings.py` — new `CoverageConfig` (`qualification_enabled: bool = True`, alias
+  `qualification-enabled`) nested under `TelemetryConfig.coverage`; `config.yaml` gets the matching example
+  block. Must start unchanged with the section absent (spec §22) — covered by a new settings test.
+- `app/api/runtime.py` — `DeclaredOnlyRelationOut`/`ServiceRuntimeRelationOut` gain `coverage: str`/
+  `coverage: str | None`; `get_declared_only`/`get_service_runtime_profile` thread
+  `settings.config.telemetry.coverage.qualification_enabled` through and populate the new field.
+  `app/templates/service.html` shows `(coverage: X)` next to a `NOT_OBSERVED_IN_WINDOW` row (the
+  implementation sequence's "API/UI representation" step) — checked against the existing
+  obsolete/unused/dead forbidden-word tests, which still pass unchanged.
+- **A real, pre-existing correctness bug found and fixed, not introduced by this iteration**: writing a
+  test that (correctly, for the first time) exercised O2/O3/O4 together against a graph where the *same*
+  environment has both a `CONFIRMED` and a `DECLARED_ONLY` relation surfaced that `_O1_QUERY`/
+  `_status_query` (O2/O3)/`_O4_QUERY` were all silently leaking rows into the wrong category. Root cause:
+  Cypher parses a `WHERE` clause written directly after `OPTIONAL MATCH` as part of that `OPTIONAL MATCH`'s
+  own pattern, not as a row filter — when the declared/observed `EXISTS{}` guard evaluated false, the row
+  wasn't dropped, it was kept with `provider` wrongly null-padded (falling back to the raw operation id via
+  `coalesce(provider.id, o.id)`). Every existing O1/O2/O3/O4 test happened to use a fresh, single-purpose
+  environment where no relation's guard was ever false while another relation's guard was true in the same
+  query execution, so this was invisible until now — but it would affect *any* real deployment where a
+  service has both confirmed and non-confirmed relations in the same environment, which is the normal case,
+  not an edge case. Fixed by inserting `WITH a, r, o, provider` between the `OPTIONAL MATCH` and `WHERE` in
+  all three queries, forcing the guard to filter the row instead of the optional pattern. Locked in with a
+  dedicated regression test (`test_o2_o3_o4_do_not_cross_leak_when_the_same_environment_has_both_confirmed_and_declared_only`)
+  reproducing the exact scenario, plus corrected assertions in two tests that had been silently passing for
+  the wrong reason (`test_get_service_runtime_profile`, `test_service_runtime_profile_combines_...`) — both
+  now assert the real `PARTIAL` coverage classification the bug had been masking as `SUFFICIENT`.
+- 7 new unit tests (352, up from 345): `_classify_coverage`'s five cases (disabled → `UNKNOWN`; no
+  coverage row → `UNKNOWN`; same-kind observed → `SUFFICIENT` for both `CALLS` and `SENDS`/`RECEIVES_FROM`;
+  different-kind observed → `PARTIAL`; nothing observed → `NONE`) plus two new settings tests
+  (`qualification-enabled` defaults true when absent, can be set false).
+- 4 new integration tests (131, up from 127): two new O4 coverage-classification tests (`PARTIAL`,
+  qualification-disabled → `UNKNOWN`; `NONE`/`SUFFICIENT` covered by corrected assertions on two already-
+  existing O4 tests), the cross-leak regression test above, and a new declared-only API test asserting
+  `"coverage"` in the JSON envelope. Plus corrected/extended assertions (not new test functions) in four
+  existing tests: the two O4 coverage tests now also assert `NONE`/`SUFFICIENT`, the UI declared-only test
+  now asserts `"coverage: NONE"` renders, and the two profile tests the bug fix changed now assert the real
+  `PARTIAL` classification.
+
 ## Getting started
 
 Iterations 0 and 1 need no Neo4j/Docker and can start immediately:

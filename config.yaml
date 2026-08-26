@@ -25,6 +25,8 @@ architecture_intelligence:
       enabled: true
       ttl-seconds: 60
       max-pending-spans: 10000
+    coverage:
+      qualification-enabled: true
   runtime_analysis:
     default_window_hours: 24
     default_environment: production

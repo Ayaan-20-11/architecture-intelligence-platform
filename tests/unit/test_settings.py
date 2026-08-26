@@ -87,6 +87,31 @@ def test_load_secrets_raises_without_password(monkeypatch):
         load_secrets()
 
 
+def test_coverage_qualification_enabled_defaults_true_when_absent(tmp_path):
+    # 11H-E/spec §22 - the app must still start with this new config section entirely absent,
+    # defaulting to qualification enabled.
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(CONFIG_YAML)
+
+    config = load_config(config_path)
+
+    assert config.telemetry.coverage.qualification_enabled is True
+
+
+def test_coverage_qualification_enabled_can_be_disabled(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "architecture_intelligence:\n"
+        "  telemetry:\n"
+        "    coverage:\n"
+        "      qualification-enabled: false\n"
+    )
+
+    config = load_config(config_path)
+
+    assert config.telemetry.coverage.qualification_enabled is False
+
+
 def test_load_settings_combines_config_and_secrets(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(CONFIG_YAML)

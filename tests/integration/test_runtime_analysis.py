@@ -5,6 +5,10 @@ import pytest
 from testcontainers.community.neo4j import Neo4jContainer
 
 from app.analysis.runtime import (
+    COVERAGE_NONE,
+    COVERAGE_PARTIAL,
+    COVERAGE_SUFFICIENT,
+    COVERAGE_UNKNOWN,
     NOT_OBSERVED_IN_WINDOW,
     confirmed_relations,
     declared_only_relations,
@@ -181,6 +185,53 @@ def test_o2_is_scoped_by_environment(driver, session):
     assert not any(r.source_id == subject_id and r.target_id == provider_id for r in results)
 
 
+def test_o2_o3_o4_do_not_cross_leak_when_the_same_environment_has_both_confirmed_and_declared_only(
+    driver, session
+):
+    # Regression test for a real Cypher bug this iteration found and fixed: a `WHERE` clause
+    # directly after `OPTIONAL MATCH` is parsed as part of that OPTIONAL MATCH's own pattern, not
+    # as a row filter (Cypher grammar) - a false declared/observed guard just null-padded
+    # `provider` instead of dropping the row, so O2/O3/O4 leaked rows into each other's category
+    # whenever the same environment had both a CONFIRMED and a DECLARED_ONLY/OBSERVED_ONLY
+    # relation - i.e. virtually any real, non-trivial graph. Every prior O2/O3/O4 test happened to
+    # use a fresh, single-purpose environment where this never triggered.
+    env = "o2-o3-o4-mixed-env"
+    order_id = ids.service_id("order-service")
+    product_operation_id = ids.operation_id(
+        ids.service_id("product-service"), "GET", "/products/{id}"
+    )
+    provider_id = ids.service_id("product-service")
+    payment_id = ids.service_id("payment-service")
+    invoice_q_id = ids.queue_id("invoice-q")
+
+    # order-service -> product-service GET /products/{id} is declared (examples fixture); observe
+    # it here so it becomes CONFIRMED. payment-service -> invoice-q is also declared (examples
+    # fixture) but stays unobserved in this same environment, so it must remain DECLARED_ONLY.
+    _persist(
+        driver,
+        _fact(
+            subject_id=order_id,
+            relation_type="CALLS",
+            object_id=product_operation_id,
+            environment=env,
+        ),
+    )
+
+    confirmed = confirmed_relations(session, environment=env, since=SINCE)
+    observed_only = observed_only_relations(session, environment=env, since=SINCE)
+    declared_only = declared_only_relations(session, environment=env, since=SINCE)
+
+    assert any(r.source_id == order_id and r.target_id == provider_id for r in confirmed)
+    assert not any(r.source_id == payment_id and r.target_id == invoice_q_id for r in confirmed)
+    assert not any(r.source_id == order_id and r.target_id == provider_id for r in observed_only)
+
+    declared_only_pairs = {(r.source_id, r.target_id) for r in declared_only}
+    assert (payment_id, invoice_q_id) in declared_only_pairs
+    # The bug: this CONFIRMED relation used to also leak into O4's results.
+    assert (order_id, provider_id) not in declared_only_pairs
+    assert (order_id, product_operation_id) not in declared_only_pairs
+
+
 # --- O3: observed-only relations, including a genuinely undeclared (no PROVIDES) operation ------
 
 
@@ -245,12 +296,17 @@ def test_o4_reports_not_observed_in_window_with_no_coverage(driver, session):
     assert row.status == NOT_OBSERVED_IN_WINDOW
     assert row.status == "NOT_OBSERVED_IN_WINDOW"  # pin the literal spec §40 vocabulary directly
     assert row.telemetry_coverage_available is False
+    # 11H-E/spec §11: payment-service emitted no usable telemetry at all in this environment/
+    # window - the weakest possible evidence for a "not observed" finding.
+    assert row.coverage == COVERAGE_NONE
 
 
 def test_o4_reports_coverage_available_when_the_subject_has_other_observed_traffic(driver, session):
     subject_id = ids.service_id("payment-service")
     # Some unrelated observed SENDS from payment-service, in the same environment/window, gives
     # payment-service messaging coverage even though THIS specific relation is still unobserved.
+    # payment-service->invoice-q is itself a declared SENDS (spec fixture), so this unrelated
+    # observation is the *same* relation kind - the strongest coverage classification.
     _persist(
         driver,
         _fact(
@@ -267,6 +323,43 @@ def test_o4_reports_coverage_available_when_the_subject_has_other_observed_traff
     row = next(r for r in results if r.source_id == subject_id and r.target_id == object_id)
     assert row.status == NOT_OBSERVED_IN_WINDOW
     assert row.telemetry_coverage_available is True
+    assert row.coverage == COVERAGE_SUFFICIENT
+
+
+def test_o4_reports_partial_coverage_when_only_a_different_relation_kind_was_observed(
+    driver, session
+):
+    subject_id = ids.service_id("payment-service")
+    # payment-service->invoice-q is a declared SENDS - observing an unrelated CALLS from
+    # payment-service gives it *some* telemetry coverage (http), but not of this row's own kind
+    # (messaging) - weaker evidence than test_o4_reports_coverage_available_..._traffic's case.
+    _persist(
+        driver,
+        _fact(
+            subject_id=subject_id,
+            relation_type="CALLS",
+            object_id=ids.operation_id(ids.service_id("product-service"), "GET", "/products/{id}"),
+            environment="o4-env-partial",
+        ),
+    )
+
+    object_id = ids.queue_id("invoice-q")
+    results = declared_only_relations(session, environment="o4-env-partial", since=SINCE)
+    row = next(r for r in results if r.source_id == subject_id and r.target_id == object_id)
+    assert row.status == NOT_OBSERVED_IN_WINDOW
+    assert row.telemetry_coverage_available is False  # unchanged boolean semantics (kind-specific)
+    assert row.coverage == COVERAGE_PARTIAL
+
+
+def test_o4_coverage_is_unknown_when_qualification_is_disabled(driver, session):
+    subject_id = ids.service_id("payment-service")
+    object_id = ids.queue_id("invoice-q")
+
+    results = declared_only_relations(
+        session, environment="o4-env-disabled", since=SINCE, qualification_enabled=False
+    )
+    row = next(r for r in results if r.source_id == subject_id and r.target_id == object_id)
+    assert row.coverage == COVERAGE_UNKNOWN
 
 
 # --- O5: telemetry coverage ----------------------------------------------------------------------
@@ -400,6 +493,12 @@ def test_service_runtime_profile_combines_confirmed_observed_only_and_declared_o
     assert any(r.target_id == legacy_operation_id for r in by_status.get("OBSERVED_ONLY", []))
     declared_only_targets = {r.target_id for r in by_status.get(NOT_OBSERVED_IN_WINDOW, [])}
     assert ids.queue_id("payment-q") in declared_only_targets
+    # 11H-E: order-service has observed CALLS (http) traffic in this env but no observed
+    # SENDS (messaging) traffic - the payment-q row is a different kind, so PARTIAL not SUFFICIENT.
+    payment_q_row = next(
+        r for r in by_status[NOT_OBSERVED_IN_WINDOW] if r.target_id == ids.queue_id("payment-q")
+    )
+    assert payment_q_row.coverage == COVERAGE_PARTIAL
 
     direct_coverage = telemetry_coverage(
         session, environment="profile-env", since=SINCE, service_ids=[order_id]

@@ -43,12 +43,25 @@ class HttpCorrelationConfig(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class CoverageConfig(BaseModel):
+    """11H R7/spec §11/§22 - whether O4's NOT_OBSERVED_IN_WINDOW rows get qualified with a
+    SUFFICIENT/PARTIAL/NONE/UNKNOWN coverage classification. Must stay optional with a safe
+    default so an existing config.yaml with none of these keys still starts the app unchanged
+    (spec §22); disabling it degrades every row's `coverage` to UNKNOWN rather than omitting the
+    field, so API consumers never need to branch on its presence."""
+
+    qualification_enabled: bool = Field(default=True, alias="qualification-enabled")
+
+    model_config = {"populate_by_name": True}
+
+
 class TelemetryConfig(BaseModel):
     service_aliases: dict[str, str] = Field(default_factory=dict)
     queue_aliases: dict[str, str] = Field(default_factory=dict)
     http_correlation: HttpCorrelationConfig = Field(
         default_factory=HttpCorrelationConfig, alias="http-correlation"
     )
+    coverage: CoverageConfig = Field(default_factory=CoverageConfig)
 
     model_config = {"populate_by_name": True}
 

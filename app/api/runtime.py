@@ -57,6 +57,7 @@ class DeclaredOnlyRelationOut(BaseModel):
     environment: str
     status: str
     telemetry_coverage_available: bool = Field(alias="telemetryCoverageAvailable")
+    coverage: str
 
 
 class DeclaredOnlyListOut(BaseModel):
@@ -93,6 +94,7 @@ class ServiceRuntimeRelationOut(BaseModel):
     last_seen: datetime | None = Field(alias="lastSeen")
     observation_count: int | None = Field(alias="observationCount")
     telemetry_coverage_available: bool | None = Field(alias="telemetryCoverageAvailable")
+    coverage: str | None
 
 
 class ServiceRuntimeProfileOut(BaseModel):
@@ -190,7 +192,12 @@ def get_service_runtime_profile(
     env = environment or settings.config.runtime_analysis.default_environment
     resolved_since, resolved_until = _resolve_window(settings, since, until)
     profile = service_runtime_profile(
-        session, service_id=service_id, environment=env, since=resolved_since, until=until
+        session,
+        service_id=service_id,
+        environment=env,
+        since=resolved_since,
+        until=until,
+        qualification_enabled=settings.config.telemetry.coverage.qualification_enabled,
     )
     if profile is None:
         raise HTTPException(status_code=404, detail=f"service not found: {service_id}")
@@ -210,6 +217,7 @@ def get_service_runtime_profile(
                 last_seen=_native(r.last_seen),
                 observation_count=r.observation_count,
                 telemetry_coverage_available=r.telemetry_coverage_available,
+                coverage=r.coverage,
             )
             for r in profile.relations
         ],
@@ -288,7 +296,13 @@ def get_declared_only(
     """O4 (spec §45/§47). status is always the literal NOT_OBSERVED_IN_WINDOW (H4.16)."""
     env = environment or settings.config.runtime_analysis.default_environment
     resolved_since, resolved_until = _resolve_window(settings, since, until)
-    rows = declared_only_relations(session, environment=env, since=resolved_since, until=until)
+    rows = declared_only_relations(
+        session,
+        environment=env,
+        since=resolved_since,
+        until=until,
+        qualification_enabled=settings.config.telemetry.coverage.qualification_enabled,
+    )
     return DeclaredOnlyListOut(
         environment=env,
         window=RuntimeWindow(from_=resolved_since, to=resolved_until),
@@ -302,6 +316,7 @@ def get_declared_only(
                 environment=r.environment,
                 status=r.status,
                 telemetry_coverage_available=r.telemetry_coverage_available,
+                coverage=r.coverage,
             )
             for r in rows
         ],

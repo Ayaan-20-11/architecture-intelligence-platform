@@ -174,6 +174,12 @@ def test_get_service_runtime_profile(client):
     assert "coverage" in body
     assert body["coverage"]["httpObserved"] is True
 
+    # 11H-E: order-service's declared-but-unobserved SENDS to payment-q gets a per-relation
+    # coverage classification too - order-service has http coverage but no messaging coverage in
+    # this environment, so this specific (messaging) row is PARTIAL, not SUFFICIENT.
+    not_observed_row = next(r for r in body["relations"] if r["status"] == "NOT_OBSERVED_IN_WINDOW")
+    assert not_observed_row["coverage"] == "PARTIAL"
+
 
 def test_get_service_runtime_profile_not_found(client):
     response = client.get("/api/runtime/services/service:does-not-exist")
@@ -223,6 +229,20 @@ def test_get_declared_only_status_is_literal_not_observed_in_window(client):
     assert "telemetryCoverageAvailable" in row
 
 
+def test_get_declared_only_exposes_coverage_qualification(client):
+    # I6/11H-E: payment-service (the payment->invoice-q row's subject) has no observed traffic at
+    # all in this fixture/environment - coverage must classify as NONE, the weakest evidence for a
+    # NOT_OBSERVED_IN_WINDOW finding.
+    response = client.get(
+        "/api/analysis/runtime/declared-only", params={"environment": ENVIRONMENT}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    ids_map = _ids()
+    row = next(r for r in body["relations"] if r["targetId"] == ids_map["invoice_q"])
+    assert row["coverage"] == "NONE"
+
+
 def test_get_coverage(client):
     response = client.get("/api/analysis/runtime/coverage", params={"environment": ENVIRONMENT})
     assert response.status_code == 200
@@ -258,6 +278,8 @@ def test_ui_service_explorer_shows_not_observed_in_window_for_declared_only(clie
     assert response.status_code == 200
     text = response.text
     assert "NOT_OBSERVED_IN_WINDOW" in text
+    # 11H-E: payment-service has no observed telemetry at all in this fixture/environment.
+    assert "coverage: NONE" in text
     for forbidden in ("obsolete", "unused", "dead"):
         assert forbidden not in text.lower()
 

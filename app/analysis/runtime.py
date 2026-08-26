@@ -7,6 +7,14 @@ NOT_OBSERVED_IN_WINDOW = "NOT_OBSERVED_IN_WINDOW"
 DEFAULT_WINDOW_HOURS = 24
 DEFAULT_ENVIRONMENT = "production"
 
+# 11H R7/spec §11.2 - qualitative coverage classification for a NOT_OBSERVED_IN_WINDOW finding.
+# Deliberately a fixed small vocabulary, not a numeric confidence score (spec §11.2 explicitly
+# doesn't require one).
+COVERAGE_SUFFICIENT = "SUFFICIENT"
+COVERAGE_PARTIAL = "PARTIAL"
+COVERAGE_NONE = "NONE"
+COVERAGE_UNKNOWN = "UNKNOWN"
+
 # Shared building blocks for the CALLS branch used by O1-O4: CALLS always goes
 # (Service)-[r]->(Operation), never Service->Service, and PROVIDES is only ever written by the
 # declared OpenAPI import path (never by the H4 telemetry pipeline for an undeclared/Fall-B
@@ -61,6 +69,12 @@ class RelationObservation:
 _O1_QUERY = (
     "MATCH (a:Service)-[r:CALLS]->(o:Operation) "
     "OPTIONAL MATCH (o)<-[:PROVIDES]-(provider:Service) "
+    # WITH is required here, not cosmetic: a WHERE clause directly after OPTIONAL MATCH is parsed
+    # as part of that OPTIONAL MATCH's own pattern (Cypher grammar), not as a row filter - a false
+    # condition just null-pads `provider` instead of dropping the row. This silently broke O1's
+    # to_id/relation_type/from_id filters whenever they'd otherwise exclude a CALLS row (the row
+    # survived anyway, with a wrongly-nulled provider feeding _CALLS_TARGET_ID_EXPR's fallback).
+    "WITH a, r, o, provider "
     "WHERE ($relation_type IS NULL OR $relation_type = 'CALLS') "
     "AND ($from_id IS NULL OR a.id = $from_id) "
     f"AND ($to_id IS NULL OR {_CALLS_TARGET_ID_EXPR} = $to_id) "
@@ -118,6 +132,13 @@ def _status_query(declared_guard: str, observed_guard: str) -> str:
     return (
         "MATCH (a:Service)-[r:CALLS]->(o:Operation) "
         "OPTIONAL MATCH (o)<-[:PROVIDES]-(provider:Service) "
+        # See _O1_QUERY's comment - WHERE right after OPTIONAL MATCH filters the optional pattern,
+        # not the row, so this WITH is required for the declared_guard/observed_guard EXISTS{}
+        # checks to actually exclude non-matching rows instead of null-padding provider and
+        # silently keeping them (which made O2/O3 return rows that belonged in the other's
+        # category, or in O4, whenever the same environment had both CONFIRMED and DECLARED_ONLY/
+        # OBSERVED_ONLY relations - i.e. essentially every non-trivial real graph).
+        "WITH a, r, o, provider "
         f"WHERE {declared_guard} AND {observed_guard} "
         "UNWIND coalesce(r.evidence_ids, []) AS eid "
         "MATCH (e:Evidence {id: eid}) "
@@ -180,11 +201,14 @@ class DeclaredOnlyRelation:
     since: datetime
     status: str
     telemetry_coverage_available: bool
+    coverage: str
 
 
 _O4_QUERY = (
     "MATCH (a:Service)-[r:CALLS]->(o:Operation) "
     "OPTIONAL MATCH (o)<-[:PROVIDES]-(provider:Service) "
+    # Same fix as _O1_QUERY/_status_query - see their comments.
+    "WITH a, r, o, provider "
     f"WHERE {_DECLARED_EXISTS} AND {_NOT_OBSERVED_EXISTS} "
     f"RETURN a.id AS source_id, a.name AS source_name, 'CALLS' AS relation_type, {_CALLS_TARGET} "
     "UNION "
@@ -197,12 +221,21 @@ _O4_QUERY = (
 
 
 def declared_only_relations(
-    session: neo4j.Session, *, environment: str, since: datetime, until: datetime | None = None
+    session: neo4j.Session,
+    *,
+    environment: str,
+    since: datetime,
+    until: datetime | None = None,
+    qualification_enabled: bool = True,
 ) -> list[DeclaredOnlyRelation]:
     """O4 - Declared - Observed(window, environment) (spec §45/§38). telemetry_coverage_available
-    is composed from O5 (not duplicated Cypher), read off each row's SUBJECT - which is always a
-    real, directly-identified Service, so this never needs the PROVIDES/target-side resolution
-    that O1-O3's target identity does."""
+    and coverage are both composed from O5 (not duplicated Cypher), read off each row's SUBJECT -
+    which is always a real, directly-identified Service, so this never needs the
+    PROVIDES/target-side resolution that O1-O3's target identity does. qualification_enabled is
+    spec §22's `telemetry.coverage.qualification-enabled` kill switch (11H-E/spec §11) - when
+    False, `coverage` degrades to UNKNOWN for every row rather than being omitted, so API
+    consumers never need to branch on the field's presence; telemetry_coverage_available's
+    original boolean semantics are untouched either way."""
     rows = [
         dict(record)
         for record in session.run(_O4_QUERY, environment=environment, since=since, until=until)
@@ -230,6 +263,11 @@ def declared_only_relations(
                 since=since,
                 status=NOT_OBSERVED_IN_WINDOW,
                 telemetry_coverage_available=available,
+                coverage=_classify_coverage(
+                    service_coverage,
+                    row["relation_type"],
+                    qualification_enabled=qualification_enabled,
+                ),
             )
         )
     return results
@@ -323,6 +361,38 @@ def telemetry_coverage(
     return results
 
 
+def _classify_coverage(
+    service_coverage: ServiceTelemetryCoverage | None,
+    relation_type: str,
+    *,
+    qualification_enabled: bool,
+) -> str:
+    """Qualifies how much weight an O4 NOT_OBSERVED_IN_WINDOW finding should carry (11H R7/spec
+    §11, 11H.11) - derived entirely from the O5 coverage signals already computed for this
+    service/window/environment, no new Cypher. UNKNOWN when qualification is disabled (spec §22)
+    or the subject has no coverage row at all (shouldn't normally happen - its own declared
+    relation makes it a real Service - but is structurally the "can't assess" case either way).
+    Otherwise: SUFFICIENT if the service has observed traffic of the *same* relation kind
+    (CALLS -> http_observed, SENDS/RECEIVES_FROM -> messaging_observed) in this window/
+    environment - a not-observed edge of a well-covered kind is meaningful evidence. PARTIAL if
+    the service emits some telemetry but not of this kind (e.g. HTTP is instrumented but
+    messaging isn't) - weaker evidence, since this kind simply isn't watched. NONE if the service
+    emitted no usable telemetry at all in this window/environment - spec §11.1's Case B, the
+    weakest possible evidence for "not observed"."""
+    if not qualification_enabled or service_coverage is None:
+        return COVERAGE_UNKNOWN
+    relevant_observed = (
+        service_coverage.http_observed
+        if relation_type == "CALLS"
+        else service_coverage.messaging_observed
+    )
+    if relevant_observed:
+        return COVERAGE_SUFFICIENT
+    if service_coverage.spans_observed:
+        return COVERAGE_PARTIAL
+    return COVERAGE_NONE
+
+
 @dataclass(frozen=True)
 class RuntimeRelationStatus:
     """One outgoing relation from a profiled service, labeled with its O2/O3/O4 status (used by
@@ -337,6 +407,7 @@ class RuntimeRelationStatus:
     last_seen: datetime | None
     observation_count: int | None
     telemetry_coverage_available: bool | None  # only meaningful for NOT_OBSERVED_IN_WINDOW rows
+    coverage: str | None  # SUFFICIENT/PARTIAL/NONE/UNKNOWN - only meaningful for the same rows
 
 
 @dataclass(frozen=True)
@@ -359,6 +430,7 @@ def service_runtime_profile(
     environment: str,
     since: datetime,
     until: datetime | None = None,
+    qualification_enabled: bool = True,
 ) -> ServiceRuntimeProfile | None:
     """Per-service runtime view: this service's outgoing CONFIRMED + OBSERVED_ONLY + DECLARED_ONLY
     relations plus its O5 coverage (spec §49's sketch shows only outgoing declared/observed
@@ -384,7 +456,13 @@ def service_runtime_profile(
     ]
     declared_only = [
         r
-        for r in declared_only_relations(session, environment=environment, since=since, until=until)
+        for r in declared_only_relations(
+            session,
+            environment=environment,
+            since=since,
+            until=until,
+            qualification_enabled=qualification_enabled,
+        )
         if r.source_id == service_id
     ]
     coverage = telemetry_coverage(
@@ -402,6 +480,7 @@ def service_runtime_profile(
                 last_seen=r.last_seen,
                 observation_count=r.observation_count,
                 telemetry_coverage_available=None,
+                coverage=None,
             )
             for r in confirmed
         ]
@@ -415,6 +494,7 @@ def service_runtime_profile(
                 last_seen=r.last_seen,
                 observation_count=r.observation_count,
                 telemetry_coverage_available=None,
+                coverage=None,
             )
             for r in observed_only
         ]
@@ -428,6 +508,7 @@ def service_runtime_profile(
                 last_seen=None,
                 observation_count=None,
                 telemetry_coverage_available=r.telemetry_coverage_available,
+                coverage=r.coverage,
             )
             for r in declared_only
         ]

@@ -47,7 +47,7 @@
   <ul>{% for r in observed.relations %}<li>
     {% if r.status == "CONFIRMED" %}&#10003;{% elif r.status == "OBSERVED_ONLY" %}!{% else %}&#9675;{% endif %}
     {{ r.relation_type }} {{ r.target_name }}
-    {% if r.status == "NOT_OBSERVED_IN_WINDOW" %}<span class="status">{{ r.status }}</span>{% endif %}
+    {% if r.status == "NOT_OBSERVED_IN_WINDOW" %}<span class="status">{{ r.status }}</span> <span class="coverage">(coverage: {{ r.coverage }})</span>{% endif %}
     {% if r.observation_count %}<span class="count">({{ r.observation_count }} observations)</span>{% endif %}
   </li>{% endfor %}</ul>
   {% else %}<p class="empty">no runtime observations</p>{% endif %}
