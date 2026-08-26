@@ -298,6 +298,42 @@ def test_post_query_with_semantically_invalid_cypher_returns_422(driver):
     assert body["expectedTarget"] == ["Queue"]
 
 
+def test_post_query_deterministic_intent_works_without_llm_configured(client):
+    # Proves a known-intent question succeeds with zero LLM provider configured (H3) - unlike
+    # the 503 above, which is only for genuinely UNKNOWN questions.
+    response = client.post("/api/query", json={"question": "Which queues have no consumer?"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["execution_mode"] == "DETERMINISTIC"
+    assert body["intent"] == "A3_QUEUES_WITHOUT_CONSUMERS"
+    assert body["cypher"] is None
+
+
+def test_post_query_deterministic_rows_match_analysis_endpoint_a1(client):
+    query_response = client.post("/api/query", json={"question": "Who sends to payment-q?"})
+    analysis_response = client.get(f"/api/analysis/queues/{ids.queue_id('payment-q')}/senders")
+    assert query_response.json()["rows"] == analysis_response.json()
+
+
+def test_post_query_deterministic_rows_match_analysis_endpoint_a4(client):
+    query_response = client.post(
+        "/api/query", json={"question": "What queues have a consumer but no known sender?"}
+    )
+    analysis_response = client.get("/api/analysis/queues/without-senders")
+    assert query_response.json()["rows"] == analysis_response.json()
+
+
+def test_post_query_ac_h3_7_live_test_regression(client):
+    response = client.post(
+        "/api/query", json={"question": "What queues have a consumer but no known sender?"}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["execution_mode"] == "DETERMINISTIC"
+    assert body["intent"] == "A4_QUEUES_WITHOUT_SENDERS"
+    assert [row["queue_name"] for row in body["rows"]] == ["unknown-producer-q"]
+
+
 def test_ui_index_lists_services_and_queues(client):
     response = client.get("/")
     assert response.status_code == 200
@@ -358,3 +394,10 @@ def test_ui_query_page_with_question_and_provider_shows_real_answer(client_with_
     assert response.status_code == 200
     assert "who sends payment-q?" in response.text
     assert "Found 4 row(s)." in response.text
+
+
+def test_ui_query_page_deterministic_intent_shown_without_provider(client):
+    response = client.get("/query", params={"question": "Which queues have no consumer?"})
+    assert response.status_code == 200
+    assert "Deterministic Analysis" in response.text
+    assert "A3_QUEUES_WITHOUT_CONSUMERS" in response.text

@@ -16,3 +16,5 @@ architecture_intelligence:
   llm:
     enabled: true
     max_result_rows: 100
+  intent_router:
+    deterministic_threshold: 0.9

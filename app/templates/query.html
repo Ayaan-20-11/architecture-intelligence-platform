@@ -13,6 +13,14 @@
   <p>{{ result.question }}</p>
 </section>
 <section>
+  <h2>Execution</h2>
+  {% if result.execution_mode == "DETERMINISTIC" %}
+  <p>Deterministic Analysis ({{ result.intent }})</p>
+  {% else %}
+  <p>LLM-generated Cypher</p>
+  {% endif %}
+</section>
+<section>
   <h2>Generated Cypher</h2>
   {% if result.cypher %}<pre>{{ result.cypher }}</pre>{% else %}<p class="empty">not available</p>{% endif %}
 </section>

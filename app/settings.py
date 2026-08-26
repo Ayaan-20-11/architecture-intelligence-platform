@@ -27,11 +27,16 @@ class LLMConfig(BaseModel):
     max_result_rows: int = 100
 
 
+class IntentRouterConfig(BaseModel):
+    deterministic_threshold: float = 0.90
+
+
 class AppConfig(BaseModel):
     sources: SourcesConfig = Field(default_factory=SourcesConfig)
     graph: GraphConfig = Field(default_factory=GraphConfig)
     import_: ImportConfig = Field(default_factory=ImportConfig, alias="import")
     llm: LLMConfig = Field(default_factory=LLMConfig)
+    intent_router: IntentRouterConfig = Field(default_factory=IntentRouterConfig)
 
     model_config = {"populate_by_name": True}
 

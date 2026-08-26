@@ -273,6 +273,69 @@ Neo4j. Second of the hardening spec's three sub-projects, built alone after H1 p
   Testcontainers test proving a semantically invalid query never reaches the graph, and an end-to-end
   FastAPI test asserting the 422 body shape through `POST /api/query`.
 
+## Iteration 10C — Deterministic Intent Router (H3)
+`Architecture_Intelligence_Platform_Core_Hardening_Specification.md` §6. **Exit criterion:** the
+Iteration 9 live-test question "What queues have a consumer but no known sender?" resolves
+deterministically to A4 through the normal NL endpoint, never invoking LLM Cypher generation. Third and
+final hardening sub-project, built alone after H1/H2 per the spec's own "don't implement in parallel"
+guidance.
+
+- `app/intent/model.py` — `ArchitectureIntent(StrEnum)` (5 analyses + `UNKNOWN`) and
+  `IntentResult(intent, confidence, parameters)`, per spec §6.4/§6.5 literally. No `AMBIGUOUS` member —
+  spec §6.9 marks it explicitly optional/future, and `UNKNOWN` already covers both "no pattern matched"
+  and "matched but entity ambiguous."
+- `app/intent/entity_resolver.py` — pure matching logic decoupled from Neo4j I/O (mirrors
+  `blast_radius.py`'s existing injected-callable style): `resolve(candidates, raw_text)` normalizes by
+  stripping all separators (not collapsing whitespace to `-`, which would fail to equate `"OrderService"`
+  with `"order-service"`), tries an exact match first (unique → return it, 2+ → ambiguous → `None`),
+  else falls back to substring match (unique → return it, 0 or 2+ → `None`) — never guesses (spec §6.10).
+  `fetch_candidates(session, label)` is the thin Neo4j-touching wrapper.
+- `app/intent/patterns.py` — regex templates for EN/DE phrasings of A1/A2/A5 (mandatory anchor words
+  `"to"`/`"from"`/`"von"`/`"vom"` — never optional, so free text can't accidentally match) plus
+  keyword-combination matching for A3/A4 (`"queue"` + a no-sender/no-consumer phrase, order-independent
+  via `.search`, since the spec itself uses two different A4 phrasings that no single fixed sentence
+  would both match).
+- `app/intent/router.py` — `classify(question, *, candidates, threshold=0.90)`, a plain function
+  (matching the majority convention in `app/ai/*.py`, not a class) taking a pre-fetched
+  `dict[str, list[tuple[str,str]]]` of `Service`/`Queue` candidates rather than an injected callable —
+  simpler given both label lists are small and always needed together at this PoC scale. Confidence is
+  only ever 1.0 or 0.0 (rule-based, not statistical); the `deterministic_threshold` comparison is still
+  wired per spec §6.8. LLM-based classification as a fallback tier (spec §6.6) and depth-phrase parsing
+  for A5 ("at depth 3") are explicitly deferred — not required by any AC-H3-x, and both would reintroduce
+  the non-determinism H3 exists to eliminate for the known-intent path.
+- `app/analysis/registry.py` — `INTENT_HANDLERS` maps each intent to the **existing** analysis function
+  (`senders_of_queue` etc., not the spec's literal `QueueProducerAnalysis`-style names) and
+  `execute(session, intent, parameters)` converts dataclass rows to dicts. `BLAST_RADIUS` deliberately
+  omits a `max_depth` override, relying on `blast_radius.DEFAULT_MAX_DEPTH` — the same default the REST
+  endpoint uses, so AC-H3-4 holds exactly rather than coincidentally.
+- `app/answer_router.py` (new, top-level, not under `app/ai/` — its entire point is deciding whether to
+  reach into that LLM-specific package at all, and it composes `intent`/`analysis.registry`/`ai` equally)
+  — `answer_question(...)` classifies first; a known intent runs the existing analysis directly with no
+  provider involved at all (AC-H3-3); `UNKNOWN` falls back to `ArchitectureQuestionService.ask()`, which
+  stays completely untouched (still H1/H2-hardened, `provider` still mandatory — deterministic answers
+  must work with zero LLM configured, which can't live inside a class requiring a provider to construct).
+  Raises `LLMNotConfiguredError` only when an `UNKNOWN` question has no provider available.
+- `app/settings.py`/`config.yaml` — `IntentRouterConfig(deterministic_threshold: float = 0.90)`, snake_case
+  (`intent_router: deterministic_threshold: 0.9`), not the spec's literal kebab-case example, matching
+  this repo's actual config convention. No `enabled` toggle — no AC needs a kill-switch.
+- `app/api/query.py` — `QueryResponse` gains `execution_mode: Literal["DETERMINISTIC","LLM"]` and
+  `intent: str | None` (additive, snake_case to match the model's existing fields rather than the spec's
+  literal camelCase mockup). `POST /api/query` drops the hard `Depends(get_question_service)` (which
+  503'd before the route body even ran) for `Depends(build_question_service)` (already existed, already
+  returns `None` gracefully) plus a session/settings dependency, calling `answer_question(...)` and
+  translating `LLMNotConfiguredError` to the same 503.
+- `app/api/ui.py::query_page` — same treatment, sharing `answer_question` with the JSON API rather than
+  letting the HTML page diverge; `app/templates/query.html` gained a small "Execution: Deterministic
+  Analysis ({intent}) / LLM-generated Cypher" section (spec §6.12).
+- 49 new tests (221 unit / 79 integration, up from 185/66): entity-resolver normalization/ambiguity
+  cases, `classify()` over EN/DE phrasings for all 5 intents plus synonyms/ambiguity/unknown/threshold
+  cases (including two invariant-pinning cases proving the router doesn't hijack the pre-existing
+  `/api/query` test suite's own question text), the analysis registry's dataclass→dict conversion, a
+  Testcontainers suite exercising all 5 intents end-to-end (including a provider whose
+  `generate_cypher` raises if called, pinning AC-H3-3) and the exact AC-H3-7 regression, and `test_api.py`
+  additions proving a deterministic question succeeds with zero LLM configured and that its rows match
+  the equivalent `GET /api/analysis/...` endpoint exactly (AC-H3-4).
+
 ## Getting started
 
 Iterations 0 and 1 need no Neo4j/Docker and can start immediately:

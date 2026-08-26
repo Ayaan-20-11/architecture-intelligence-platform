@@ -7,8 +7,9 @@ from fastapi.templating import Jinja2Templates
 
 from app.analysis.blast_radius import blast_radius
 from app.analysis.queues import consumers_of_queue, senders_of_queue
+from app.answer_router import LLMNotConfiguredError, answer_question
 from app.api.query import QueryResponse
-from app.deps import build_question_service, get_read_session
+from app.deps import build_question_service, get_read_session, get_settings
 
 router = APIRouter(tags=["ui"])
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
@@ -150,24 +151,36 @@ def queue_explorer(
 
 
 @router.get("/query", response_class=HTMLResponse)
-def query_page(request: Request, question: str | None = None):
+def query_page(
+    request: Request,
+    question: str | None = None,
+    session: neo4j.Session = Depends(get_read_session),
+):
     result = None
     if question:
-        service = build_question_service(request)
-        if service is None:
+        settings = get_settings(request)
+        question_service = build_question_service(request)
+        try:
+            routed = answer_question(
+                session=session,
+                question=question,
+                deterministic_threshold=settings.config.intent_router.deterministic_threshold,
+                question_service=question_service,
+            )
+            result = QueryResponse(
+                question=routed.question,
+                cypher=routed.cypher,
+                rows=routed.rows,
+                answer=routed.answer,
+                execution_mode=routed.execution_mode,
+                intent=routed.intent,
+            )
+        except LLMNotConfiguredError:
             result = QueryResponse(
                 question=question,
                 cypher=None,
                 rows=[],
                 answer="Natural language query is not configured (missing OPENAI_API_KEY, or llm.enabled is false in config.yaml).",
-            )
-        else:
-            answer_result = service.ask(question)
-            result = QueryResponse(
-                question=answer_result.question,
-                cypher=answer_result.cypher,
-                rows=answer_result.rows,
-                answer=answer_result.answer,
             )
     return templates.TemplateResponse(
         request, "query.html", {"question": question, "result": result}
