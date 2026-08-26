@@ -55,11 +55,26 @@ _EXPIRE_NODES_QUERY = (
     "WITH n WHERE size(n.sources) = 0 "
     "DETACH DELETE n"
 )
+# A stale relation key must not be deleted outright just because its declaring service stopped
+# declaring it (11H R1/spec Delete(F) iff Evidence(F) = empty) - it may still carry OBSERVED
+# evidence (from the H4 telemetry pipeline) or DECLARED evidence from another declaring service
+# (spec §5.3's shared-evidence case). So this strips $service_id from r.sources as before, but
+# also recomputes r.evidence_ids by removing only the ids that are (a) DECLARED and (b) actually
+# attributed to $service_id via that specific Evidence node's own sources array - never touching
+# another service's DECLARED evidence or any OBSERVED evidence - and only deletes the relation
+# once evidence_ids is truly empty. The list comprehension (not UNWIND+collect) is deliberate:
+# UNWIND over an empty evidence_ids list would produce zero rows and silently drop r from the rest
+# of the pipeline, which would incorrectly let an evidence-less stale relation survive forever.
 _EXPIRE_RELATIONS_QUERY = (
     "UNWIND $keys AS rkey "
     "MATCH ()-[r {key: rkey}]->() "
     "SET r.sources = [x IN r.sources WHERE x <> $service_id] "
-    "WITH r WHERE size(r.sources) = 0 "
+    "WITH r, [eid IN r.evidence_ids WHERE NOT EXISTS { "
+    "MATCH (e:Evidence {id: eid}) "
+    "WHERE e.evidence_type = 'DECLARED' AND $service_id IN coalesce(e.sources, []) "
+    "} ] AS remaining_evidence_ids "
+    "SET r.evidence_ids = remaining_evidence_ids "
+    "WITH r WHERE size(r.evidence_ids) = 0 "
     "DELETE r"
 )
 

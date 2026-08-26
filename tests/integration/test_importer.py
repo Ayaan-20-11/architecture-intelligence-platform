@@ -1,8 +1,11 @@
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from testcontainers.community.neo4j import Neo4jContainer
 
+from app.analysis.runtime import confirmed_relations, observed_only_relations
+from app.canonical import ids
 from app.canonical.model import (
     ArchitectureModel,
     Message,
@@ -14,7 +17,9 @@ from app.canonical.model import (
 )
 from app.graph.importer import import_all_sources, import_service
 from app.graph.schema import ensure_schema
-from app.provenance.model import Provenance
+from app.provenance.model import ObservedEvidence, Provenance
+from app.telemetry.aggregator import persist_observation_batch
+from app.telemetry.model import ObservationBatch, ObservedFactCandidate
 
 EXAMPLES_DIR = Path(__file__).resolve().parent.parent.parent / "examples"
 DATABASE = "neo4j"
@@ -287,6 +292,170 @@ def test_reimport_expires_stale_facts_no_longer_declared(driver):
     assert stats.relations_expired == 1
     assert _count(driver, "MATCH (q:Queue {id: 'queue:old-q'}) RETURN count(q) AS c") == 0
     assert _count(driver, "MATCH (q:Queue {id: 'queue:new-q'}) RETURN count(q) AS c") == 1
+
+
+_SINCE = datetime(2026, 8, 26, 0, 0, tzinfo=UTC)
+
+
+def _observed_fact(*, subject_id: str, relation_type: str, object_id: str, environment: str):
+    timestamp = datetime(2026, 8, 26, 12, 0, tzinfo=UTC)
+    evidence = ObservedEvidence(
+        id=ids.observed_evidence_id(
+            environment, datetime(2026, 8, 26, tzinfo=UTC), subject_id, relation_type, object_id
+        ),
+        environment=environment,
+        bucket_start=datetime(2026, 8, 26, tzinfo=UTC),
+        bucket_end=datetime(2026, 8, 27, tzinfo=UTC),
+        first_seen=timestamp,
+        last_seen=timestamp,
+        observation_count=1,
+        sample_trace_ids=["a" * 32],
+    )
+    return ObservedFactCandidate(
+        subject_id=subject_id,
+        relation_type=relation_type,
+        object_id=object_id,
+        environment=environment,
+        timestamp=timestamp,
+        trace_id="a" * 32,
+        evidence=evidence,
+    )
+
+
+def test_declared_evidence_removed_but_observed_evidence_preserved(driver):
+    # 11H-A / R1: a relation with both DECLARED and OBSERVED evidence must survive a re-import
+    # that drops the declaration, retaining exactly its OBSERVED evidence (spec Delete(F) iff
+    # Evidence(F) = empty - not iff DeclaredSources(F) = empty).
+    declared_evidence = Provenance(
+        id="evidence:asyncapi:order-service",
+        source_type="ASYNCAPI",
+        source_file="order-service/asyncapi.yaml",
+    )
+    with_relation = ArchitectureModel(
+        services=[Service(id="service:order-service", name="OrderService")],
+        queues=[Queue(id="queue:payment-q", name="payment-q")],
+        relations=[
+            Relation(
+                type="SENDS",
+                source_id="service:order-service",
+                target_id="queue:payment-q",
+                evidence_ids=[declared_evidence.id],
+            )
+        ],
+        provenance=[declared_evidence],
+    )
+    with driver.session(database=DATABASE) as session:
+        ensure_schema(session)
+        import_service(session, "order-service", with_relation)
+
+    observed_fact = _observed_fact(
+        subject_id="service:order-service",
+        relation_type="SENDS",
+        object_id="queue:payment-q",
+        environment="production",
+    )
+    persist_observation_batch(driver, DATABASE, ObservationBatch(facts=[observed_fact]))
+
+    with driver.session(database=DATABASE) as session:
+        confirmed = confirmed_relations(session, environment="production", since=_SINCE)
+    assert any(r.target_id == "queue:payment-q" for r in confirmed)
+
+    # Re-import order-service still declaring the queue itself, but no longer the SENDS
+    # relation to it - keeps the Queue node alive so only the relation goes stale, not the node
+    # (a stale Queue *node* would DETACH DELETE and take the relation down regardless of its
+    # evidence, which is a different code path than the one this test targets).
+    without_relation = ArchitectureModel(
+        services=[Service(id="service:order-service", name="OrderService")],
+        queues=[Queue(id="queue:payment-q", name="payment-q")],
+    )
+    with driver.session(database=DATABASE) as session:
+        stats = import_service(session, "order-service", without_relation)
+
+    assert stats.relations_expired == 1
+    assert (
+        _count(driver, "MATCH ()-[r:SENDS]->(:Queue {id: 'queue:payment-q'}) RETURN count(r) AS c")
+        == 1
+    )
+    with driver.session(database=DATABASE) as session:
+        relation_record = session.run(
+            "MATCH ()-[r:SENDS]->(:Queue {id: 'queue:payment-q'}) RETURN r.evidence_ids AS ids"
+        ).single()
+    assert declared_evidence.id not in relation_record["ids"]
+    assert observed_fact.evidence.id in relation_record["ids"]
+
+    with driver.session(database=DATABASE) as session:
+        observed_only = observed_only_relations(session, environment="production", since=_SINCE)
+    assert any(r.target_id == "queue:payment-q" for r in observed_only)
+
+
+def test_shared_declared_evidence_survives_reconciliation_with_observed_evidence_present(driver):
+    # Extends test_shared_relation_accumulates_evidence_from_both_declaring_services (11H-A / R1
+    # §5.3): a relation declared by two independent services plus OBSERVED evidence must lose only
+    # the reimporting service's own DECLARED evidence - never the other declarer's, never OBSERVED.
+    evidence_order = Provenance(
+        id="evidence:asyncapi:order-service",
+        source_type="ASYNCAPI",
+        source_file="order-service/asyncapi.yaml",
+    )
+    evidence_payment = Provenance(
+        id="evidence:asyncapi:payment-service",
+        source_type="ASYNCAPI",
+        source_file="payment-service/asyncapi.yaml",
+    )
+    order_model = ArchitectureModel(
+        services=[Service(id="service:order-service", name="OrderService")],
+        queues=[Queue(id="queue:payment-q", name="payment-q")],
+        messages=[Message(id="message:PaymentRequested:v2", name="PaymentRequested", version="v2")],
+        relations=[
+            Relation(
+                type="CARRIES",
+                source_id="queue:payment-q",
+                target_id="message:PaymentRequested:v2",
+                evidence_ids=[evidence_order.id],
+            ),
+        ],
+        provenance=[evidence_order],
+    )
+    payment_model = ArchitectureModel(
+        services=[Service(id="service:payment-service", name="PaymentService")],
+        queues=[Queue(id="queue:payment-q", name="payment-q")],
+        messages=[Message(id="message:PaymentRequested:v2", name="PaymentRequested", version="v2")],
+        relations=[
+            Relation(
+                type="CARRIES",
+                source_id="queue:payment-q",
+                target_id="message:PaymentRequested:v2",
+                evidence_ids=[evidence_payment.id],
+            ),
+        ],
+        provenance=[evidence_payment],
+    )
+    with driver.session(database=DATABASE) as session:
+        ensure_schema(session)
+        import_service(session, "order-service", order_model)
+        import_service(session, "payment-service", payment_model)
+
+    observed_fact = _observed_fact(
+        subject_id="queue:payment-q",
+        relation_type="CARRIES",
+        object_id="message:PaymentRequested:v2",
+        environment="production",
+    )
+    persist_observation_batch(driver, DATABASE, ObservationBatch(facts=[observed_fact]))
+
+    # order-service stops declaring the CARRIES relation entirely.
+    order_model_without_carries = ArchitectureModel(
+        services=[Service(id="service:order-service", name="OrderService")]
+    )
+    with driver.session(database=DATABASE) as session:
+        import_service(session, "order-service", order_model_without_carries)
+
+    with driver.session(database=DATABASE) as session:
+        record = session.run(
+            "MATCH (:Queue {id:'queue:payment-q'})-[r:CARRIES]->(:Message) "
+            "RETURN r.evidence_ids AS evidence_ids"
+        ).single()
+    assert set(record["evidence_ids"]) == {evidence_payment.id, observed_fact.evidence.id}
 
 
 def test_shared_queue_kept_when_still_referenced_by_another_service(driver):

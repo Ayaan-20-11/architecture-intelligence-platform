@@ -751,6 +751,65 @@ reachable via REST, the Service Explorer UI, and deterministic NL intents, closi
   already accepts OTLP directly since 11A); §59-60's retention/cleanup job (§59 itself frames 90-day
   retention as a proposal, not a requirement).
 
+## Iteration 11H-A — Evidence Reconciliation Correctness (Runtime Correctness & Robustness)
+`Architecture_Intelligence_Platform_11H_Runtime_Correctness_Robustness_Specification.md` §4-5, §19 (I1),
+§24 (11H.1-11H.3), §25-26. **Exit criterion:** a relation with both DECLARED and OBSERVED evidence
+survives a re-import that drops the declaration, retaining exactly its OBSERVED evidence and
+reclassifying as `OBSERVED_ONLY`; a relation shared by two independent declaring services loses only the
+reimporting service's evidence; a relation with zero remaining evidence is still deleted. First (P0,
+"the highest-priority part of 11H") of six planned 11H sub-iterations (11H-A..11H-F) hardening the H4
+runtime model before H5 — only 11H-A is implemented now; 11H-B..F are fully designed in the approved plan
+but deliberately not built yet.
+
+- **Root cause, confirmed by direct inspection** (already flagged as a known, unfixed risk in
+  `H4_REVIEW.md`'s "known limitations" section since 11E): `app/graph/importer.py::_EXPIRE_RELATIONS_QUERY`
+  unconditionally `DELETE`d a stale relation the instant its `sources` array emptied, without ever
+  inspecting `r.evidence_ids`/`evidence_type` — discarding any OBSERVED evidence a relation had
+  accumulated from the H4 telemetry pipeline, purely because its *declared* side stopped being declared.
+  Root cause of why `sources` was the wrong signal: `ObservedEvidence` has no `sources` field at all
+  (`aggregator.py` never sets one), so OBSERVED evidence was never eligible for the *node*-level
+  staleness path either — it just silently vanished with the deleted relation edge, becoming an orphaned
+  Evidence node no query could reach (O1-O5 traverse from the relation's `evidence_ids`, never
+  Evidence→relation).
+- **Fix**: `_EXPIRE_RELATIONS_QUERY` now recomputes `r.evidence_ids` before deciding whether to delete —
+  excluding only the ids that are (a) `evidence_type = 'DECLARED'` **and** (b) attributed to the
+  reimporting `$service_id` via that specific Evidence node's own `sources` array — and deletes the
+  relation only once `evidence_ids` is truly empty. This correctly preserves another service's DECLARED
+  evidence on a shared relation (spec §5.3) and all OBSERVED evidence unconditionally, while still
+  deleting genuinely evidence-less stale relations exactly as before. Uses a list-comprehension +
+  `EXISTS {}` form (not `UNWIND ... collect(...)`) deliberately: `UNWIND` over an empty `evidence_ids`
+  list produces zero rows and would silently drop the relation from the rest of the query pipeline,
+  incorrectly letting an evidence-less relation survive forever — the list comprehension evaluates to
+  `[]` on empty input and keeps the relation in scope. Mirrors the `EXISTS { UNWIND r.evidence_ids AS eid
+  MATCH (e:Evidence {id: eid}) WHERE ... }` idiom already established in `app/analysis/runtime.py`'s
+  `_OBSERVED_EXISTS`/`_DECLARED_EXISTS` constants rather than inventing a new one. No changes needed in
+  `plan_reconciliation()` (`app/graph/reconciliation.py`) — its pure set-difference computation of *which*
+  relation keys are stale was already correct; only what happens once a key is flagged stale changes.
+  Confirmed non-conflicting with the existing node-level staleness path
+  (`_STRIP_STALE_EVIDENCE_QUERY`/`_EXPIRE_NODES_QUERY`, which fires only when an entire Evidence node
+  itself disappears, e.g. a whole source file/revision — a different, complementary trigger from "one
+  relation triple dropped from an otherwise-still-live import").
+- Explicitly deferred (11H-B through 11H-F, fully designed in the approved plan, not built yet):
+  cross-batch HTTP CLIENT/SERVER correlation via a new bounded TTL buffer (11H-B, P0); CLIENT_ONLY/
+  SERVER_ONLY partial-instrumentation observations (11H-C, depends on 11H-B); an OBSERVED `PROVIDES`
+  relation for runtime-discovered provider operations (11H-D — plan design work already surfaced a real,
+  independently-reproduced operation-id normalization bug between `openapi_adapter.py`'s declared minting
+  and `operation_resolver.py`'s Fall-B minting that would silently break 11H.10's reconciliation
+  requirement; documented with its ~30-occurrence blast radius, not yet fixed since 11H-D isn't built);
+  qualitative telemetry coverage classification for `NOT_OBSERVED_IN_WINDOW` results (11H-E); an OTel
+  Collector-based public demo topology (11H-F). See `/home/michael/.claude/plans/scalable-soaring-grove.md`
+  for the complete, code-level design of all six sub-iterations.
+- 2 new tests (319 unit unchanged / 123 integration, up from 121 — Cypher-only fix, no unit-level surface):
+  a Testcontainers test combining `import_service` (declare) + `persist_observation_batch` (observe) + a
+  re-import dropping the declaration on the same relation — a combination the test suite had never
+  exercised before — asserting the relation survives, the declared evidence id is gone, the observed
+  evidence id remains, and O2/O3 (`confirmed_relations`/`observed_only_relations`) correctly reclassify
+  it from `CONFIRMED` to `OBSERVED_ONLY`; a second test extending the existing
+  `test_shared_relation_accumulates_evidence_from_both_declaring_services` scenario with OBSERVED
+  evidence layered on top, proving the multi-declarer case survives with exactly the other declarer's
+  DECLARED evidence and the OBSERVED evidence intact (genuinely new coverage — the original test never
+  combined the multi-declarer case with observed evidence).
+
 ## Getting started
 
 Iterations 0 and 1 need no Neo4j/Docker and can start immediately:
