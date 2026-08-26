@@ -1138,6 +1138,65 @@ committed.
   requires the *documentation* to state the principle); running the `examples/` fixtures as real, separately
   addressable HTTP services.
 
+## Iteration 12B — Documentation (Open Source Readiness)
+`Architecture_Intelligence_Platform_H5_Open_Source_Readiness_Specification.md` §10-12 (README),
+§16-19 (docs/ target structure, canonical model, graph/evidence model, adapter extension point), §33-34
+(security model, OpenTelemetry privacy model), acceptance criteria H5.6/H5.12-H5.19/H5.25/H5.26/H5.33.
+**Exit criterion:** the platform is documented as a real public-facing docs set, not just spec PDFs/
+markdown and code comments - every 11H-era invariant (fact/evidence, observed `PROVIDES`, correlation
+modes, coverage qualification) explicitly written down, not just implemented. Second of six H5
+sub-iterations; only 12A (Legal & Repository Sanitization, `e641370`) was committed before this one.
+
+- `README.md` - full rewrite to spec §10's structure (`Why? / Features / Declared vs Observed /
+  Quick Start / Example / Architecture / Deterministic Analyses / OpenTelemetry / Natural Language
+  Queries / Documentation / Contributing / Project Status / License`), replacing the previous
+  minimal README that still framed the project as "9 iterations of the PoC complete" with no
+  mention of H4/11H/runtime telemetry at all. Uses spec §10's literal hero line and spec §57's
+  literal License footer. Project Status now accurately lists the PoC + H1-H4 hardening + the full
+  11H roadmap as complete and H5 as in progress.
+- New `docs/` directory - all 12 files from spec §16's target structure (`architecture.md`,
+  `canonical-model.md`, `graph-model.md`, `evidence.md`, `ingestion.md`, `analyses.md`,
+  `semantic-validation.md`, `opentelemetry.md`, `configuration.md`, `security-model.md`,
+  `development.md`, `adapter-development.md`), each grounded in the actual current implementation
+  (function/file names, real constant values, real config defaults - never invented), matching the
+  project's own "no fact without traceable provenance" principle. Highlights:
+  - `graph-model.md` states the two 11H fact/evidence invariants explicitly (`Fact exists iff
+    supporting Evidence exists`; `Removing DECLARED evidence ⇏ removing OBSERVED evidence`, H5.13)
+    and documents the 11H-D observed-`PROVIDES`-for-runtime-discovered-operations extension and its
+    later-declaration reconciliation guarantee (H5.14).
+  - `opentelemetry.md` is the largest file - the full attribute allowlist (all 16 semconv
+    constants across `resources.py`/`http.py`/`messaging.py`), explicit definitions of
+    `CLIENT_SERVER`/`CLIENT_ONLY`/`SERVER_ONLY`/`UNRESOLVED` (H5.15), cross-batch correlation
+    (H5.16), the fixed unresolved-reason-code table, the `SUFFICIENT`/`PARTIAL`/`NONE`/`UNKNOWN`
+    coverage classification (H5.17), and the explicit `observation_count ≠ exact request count`
+    caveat (H5.18).
+  - `security-model.md` documents the bounded/TTL-based/no-raw-payload/no-Span-node HTTP
+    correlation buffer as its own explicit trust boundary (H5.25), with an explicit sentence
+    distinguishing short-lived correlation state from persisted Architecture Evidence (H5.26).
+  - `adapter-development.md` presents spec §19's two conceptual `Protocol` interfaces honestly -
+    today's adapters are plain functions honoring the same contract, not classes implementing these
+    Protocols yet; the doc says so explicitly rather than overstating current code (H5.19).
+  - `configuration.md` states the LLM-optional guarantee (H5.20) - verified against
+    `app/main.py:37-40`'s existing `llm_provider = None` fallback, no code change needed.
+- `docs/specifications/` (H5.33) - **copied, not moved**, the four existing root-level spec markdown
+  files under spec §16's suggested clean names (`h1-h3-hardening.md`, `h4-opentelemetry.md`,
+  `11h-runtime-correctness-robustness.md`, `h5-open-source-readiness.md`), plus a new `poc.md`
+  pointer to the root PDF spec (not a PDF-to-markdown conversion - disproportionate, ungrounded work
+  for a frozen historical document). Copied rather than moved specifically to avoid rewriting
+  `IMPLEMENTATION_PLAN.md`'s own ~15 existing citations to the root-level filenames, a large,
+  purely-organizational blast radius for what spec §16 itself frames as an optional structure -
+  H5.33 only requires `docs/specifications/` to *contain* the design history, not that the root
+  copies disappear.
+- No application code touched - 352 unit / 131 integration tests unchanged and still green (a
+  documentation-only iteration, mirroring 11H-F's own precedent for verification: direct inspection
+  and cross-reference spot-checks against the cited source, not new pytest cases).
+- Explicitly out of scope (later H5 iterations per spec §52): `CONTRIBUTING.md`/`SECURITY.md`/
+  `CODE_OF_CONDUCT.md`/`SUPPORT.md`/issue and PR templates (12E); GitHub Actions/CodeQL/container
+  scanning/GHCR publishing (12D); screenshots/GIF, repository topics, social preview, good-first-issue
+  tickets, CHANGELOG/ROADMAP, the version tag/release itself (12C tail end/12E/12F). The README's
+  Contributing section is worded as a placeholder rather than linking a `CONTRIBUTING.md` that
+  doesn't exist yet.
+
 ## Getting started
 
 Iterations 0 and 1 need no Neo4j/Docker and can start immediately:
