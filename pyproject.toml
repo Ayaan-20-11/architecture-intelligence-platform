@@ -1,7 +1,7 @@
 [project]
-name = "architecture-intelligence-poc"
+name = "architecture-intelligence-platform"
 version = "0.1.0"
-description = "Architecture Intelligence Platform PoC: OpenAPI + AsyncAPI -> Canonical Model -> Neo4j -> analysis + LLM query"
+description = "Evidence-backed architecture intelligence from OpenAPI, AsyncAPI and OpenTelemetry."
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.141.1",

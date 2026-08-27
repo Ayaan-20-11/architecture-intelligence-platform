@@ -33,7 +33,7 @@ wheels = [
 ]
 
 [[package]]
-name = "architecture-intelligence-poc"
+name = "architecture-intelligence-platform"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

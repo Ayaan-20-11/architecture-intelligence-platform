@@ -61,10 +61,14 @@ exact invariant this guarantees and why it matters.
 Requires Docker and Docker Compose (Python 3.13 only if you want to run it outside a container):
 
 ```bash
-git clone <repository>
-cd architecture-intelligence
+git clone https://github.com/michaelegner/architecture-intelligence-platform.git
+cd architecture-intelligence-platform
+cp .env.example .env
 docker compose up
 ```
+
+`.env.example`'s `NEO4J_PASSWORD` is a fixed local-only default (`change-me-local`) — fine for
+trying this out, never for anything reachable outside your machine.
 
 Then open <http://localhost:8000>. `config.yaml` already points at this repo's `examples/` fixture
 services, so `POST /api/import` works immediately against them. See

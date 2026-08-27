@@ -1,12 +1,13 @@
 name: Docker
 
-# H5 spec §27: on release or tag, build the image and publish it to GHCR.
+# H5 spec §27: on release, build the image and publish it to GHCR. Deliberately a single trigger
+# (release: published, not also push: tags) - publishing the release publishes the container. Both
+# triggers together doubled every build/publish (observed firing twice for v0.1.0-alpha.1: once
+# per event), which risked a race on the `latest` tag and wasted CI minutes for no benefit, since
+# `gh release create <tag>` always creates the tag as part of publishing the release anyway.
 on:
   release:
     types: [published]
-  push:
-    tags:
-      - "v*"
 
 permissions:
   contents: read

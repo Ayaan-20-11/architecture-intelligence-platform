@@ -21,7 +21,8 @@ OrderService
 
 ## 1. Prerequisites
 
-Copy `.env.example` to `.env` at the repo root and set `NEO4J_PASSWORD` (see root `README.md`).
+Copy `.env.example` to `.env` at the repo root (see root `README.md`) — its `NEO4J_PASSWORD`
+default is fine for this demo.
 
 ## 2. Bring up the stack
 
