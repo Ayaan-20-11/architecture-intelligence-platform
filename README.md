@@ -1,5 +1,8 @@
 # Architecture Intelligence Platform
 
+[![CI](https://github.com/michaelegner/architecture-intelligence-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/michaelegner/architecture-intelligence-platform/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
 Build an evidence-backed architecture knowledge graph from OpenAPI, AsyncAPI and OpenTelemetry —
 and discover where declared and observed architecture diverge.
 
