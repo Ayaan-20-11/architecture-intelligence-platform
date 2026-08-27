@@ -18,9 +18,4 @@ real API response captured this session, not a checklist marked from memory.
 | Discussions | Enabled | `has_discussions = true`; default categories present (Announcements, General, Ideas, Polls, Q&A, Show and tell) |
 | Repository topics | Set | `architecture`, `architecture-drift`, `architecture-intelligence`, `asyncapi`, `dependency-analysis`, `knowledge-graph`, `microservices`, `neo4j`, `openapi`, `opentelemetry`, `platform-engineering`, `software-architecture` |
 | Branch protection (`main`) | Enabled | Required status check (`lint + test`), force-push blocked, deletion blocked. Deliberately **no required PR review** — solo-maintainer project, direct pushes to `main` are the working model; see `docs/gaps/` (not tracked) for the reasoning. |
-
-## Not independently API-verifiable
-
-- **Social Preview image**: GitHub exposes no API for this setting — `images/AIP.png` has been
-  generated and committed, but whether it's been uploaded under Settings → General → Social preview
-  can only be confirmed by a human looking at the setting (or the rendered link-unfurl).
+| Social Preview | Set | `images/AIP.png` uploaded under Settings → General → Social preview — confirmed directly by the repository owner (2026-08-27). GitHub exposes no API for this setting, so it can't be verified any other way. |
