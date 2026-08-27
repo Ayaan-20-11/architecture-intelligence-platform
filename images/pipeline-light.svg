@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 320" role="img" aria-label="Pipeline: declared sources (OpenAPI, AsyncAPI, architecture.yaml) and observed OpenTelemetry traces both feed the Canonical Architecture Model, which imports into Neo4j, which serves deterministic Cypher analyses and read-only natural-language query.">
+  <defs>
+    <marker id="arrow-neutral-l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6b7280"/>
+    </marker>
+    <marker id="arrow-declared-l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-observed-l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#b45309"/>
+    </marker>
+  </defs>
+
+  <g font-family="Helvetica, Arial, sans-serif">
+
+    <!-- arrows (drawn first, under boxes) -->
+    <line x1="300" y1="235" x2="374" y2="235" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow-neutral-l)"/>
+    <text x="337" y="220" fill="#4b5262" font-size="12" text-anchor="middle">OTLP</text>
+
+    <line x1="300" y1="105" x2="674" y2="138" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-declared-l)"/>
+    <text x="470" y="103" fill="#2563eb" font-size="13" font-weight="bold" text-anchor="middle">declared</text>
+
+    <line x1="600" y1="225" x2="674" y2="188" stroke="#b45309" stroke-width="2" marker-end="url(#arrow-observed-l)"/>
+    <text x="640" y="252" fill="#b45309" font-size="13" font-weight="bold" text-anchor="middle">observed</text>
+
+    <line x1="920" y1="160" x2="994" y2="160" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow-neutral-l)"/>
+    <text x="957" y="145" fill="#4b5262" font-size="12" text-anchor="middle">import</text>
+
+    <line x1="1140" y1="150" x2="1194" y2="105" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow-neutral-l)"/>
+    <line x1="1140" y1="170" x2="1194" y2="215" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow-neutral-l)"/>
+
+    <!-- C1 top: declared sources -->
+    <rect x="30" y="55" width="270" height="80" rx="10" fill="#f6f7fa" stroke="#d0d5dd" stroke-width="1.5"/>
+    <text x="165" y="90" fill="#1f2430" font-size="15" text-anchor="middle">OpenAPI + AsyncAPI +</text>
+    <text x="165" y="112" fill="#1f2430" font-size="15" text-anchor="middle">architecture.yaml</text>
+
+    <!-- C1 bottom: OTel traces -->
+    <rect x="30" y="195" width="270" height="80" rx="10" fill="#f6f7fa" stroke="#d0d5dd" stroke-width="1.5"/>
+    <text x="165" y="230" fill="#1f2430" font-size="15" text-anchor="middle">OpenTelemetry traces</text>
+    <text x="165" y="252" fill="#1f2430" font-size="15" text-anchor="middle">(optional)</text>
+
+    <!-- C2 bottom: observed facts + evidence -->
+    <rect x="380" y="195" width="220" height="80" rx="10" fill="#f6f7fa" stroke="#d0d5dd" stroke-width="1.5"/>
+    <text x="490" y="230" fill="#1f2430" font-size="15" text-anchor="middle">observed facts</text>
+    <text x="490" y="252" fill="#1f2430" font-size="15" text-anchor="middle">+ evidence</text>
+
+    <!-- C3: Canonical Architecture Model -->
+    <rect x="680" y="110" width="240" height="100" rx="10" fill="#e9edf7" stroke="#8b97b8" stroke-width="1.5"/>
+    <text x="800" y="152" fill="#111524" font-size="16" font-weight="bold" text-anchor="middle">Canonical Architecture</text>
+    <text x="800" y="175" fill="#111524" font-size="16" font-weight="bold" text-anchor="middle">Model</text>
+
+    <!-- C4: Neo4j -->
+    <rect x="1000" y="125" width="140" height="70" rx="10" fill="#e9edf7" stroke="#8b97b8" stroke-width="1.5"/>
+    <text x="1070" y="167" fill="#111524" font-size="16" font-weight="bold" text-anchor="middle">Neo4j</text>
+
+    <!-- C5 top: deterministic Cypher analyses -->
+    <rect x="1200" y="55" width="270" height="80" rx="10" fill="#f6f7fa" stroke="#d0d5dd" stroke-width="1.5"/>
+    <text x="1335" y="90" fill="#1f2430" font-size="15" text-anchor="middle">deterministic Cypher</text>
+    <text x="1335" y="112" fill="#1f2430" font-size="15" text-anchor="middle">analyses</text>
+
+    <!-- C5 bottom: read-only NL query -->
+    <rect x="1200" y="195" width="270" height="80" rx="10" fill="#f6f7fa" stroke="#d0d5dd" stroke-width="1.5"/>
+    <text x="1335" y="230" fill="#1f2430" font-size="15" text-anchor="middle">read-only natural-</text>
+    <text x="1335" y="252" fill="#1f2430" font-size="15" text-anchor="middle">language query</text>
+
+  </g>
+</svg>

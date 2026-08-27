@@ -3,18 +3,8 @@
 Build an evidence-backed architecture knowledge graph from OpenAPI, AsyncAPI and OpenTelemetry —
 and discover where declared and observed architecture diverge.
 
-```text
-OpenAPI + AsyncAPI + architecture.yaml   OpenTelemetry traces (optional)
-                |                                    |
-                v                                    v
-        Canonical Architecture Model  <----  observed facts + evidence
-                |
-                v
-              Neo4j
-                |
-                v
-  deterministic Cypher analyses  +  read-only natural-language query
-```
+![Pipeline: declared sources (OpenAPI, AsyncAPI, architecture.yaml) and observed OpenTelemetry traces both feed the Canonical Architecture Model, which imports into Neo4j, which serves deterministic Cypher analyses and read-only natural-language query.](images/pipeline-light.svg#gh-light-mode-only)
+![Pipeline: declared sources (OpenAPI, AsyncAPI, architecture.yaml) and observed OpenTelemetry traces both feed the Canonical Architecture Model, which imports into Neo4j, which serves deterministic Cypher analyses and read-only natural-language query.](images/pipeline-dark.svg#gh-dark-mode-only)
 
 ## Why?
 
