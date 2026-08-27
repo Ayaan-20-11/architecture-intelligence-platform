@@ -1,4 +1,4 @@
-# Architecture Intelligence
+# Architecture Intelligence Platform
 
 Build an evidence-backed architecture knowledge graph from OpenAPI, AsyncAPI and OpenTelemetry —
 and discover where declared and observed architecture diverge.
