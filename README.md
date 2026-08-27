@@ -10,7 +10,7 @@ and discover where declared and observed architecture diverge.
 
 ## Why?
 
-Architecture documentation drifts from reality the moment it's written by hand. AIP builds its
+Hand-maintained architecture documentation tends to drift from the system it describes. AIP builds its
 knowledge graph automatically from artifacts that already exist and are already kept up to date as
 part of normal development — OpenAPI/AsyncAPI specs, a minimal manifest for the one thing they can't
 express (who calls what), and, optionally, real OpenTelemetry traffic — so every fact in the graph
@@ -188,11 +188,8 @@ undocumented?" without needing an LLM configured. See
 walkthrough — every state (`CONFIRMED`, `OBSERVED_ONLY`, `NOT_OBSERVED_IN_WINDOW`) and the
 reconciliation scenario, each with exact `curl` commands and expected results.
 
-The Service Explorer for `OrderService`, mid-demo — `ProductService`/`payment-q` are `CONFIRMED`
-(declared and observed), `LegacyPricingService` is `OBSERVED_ONLY` (a real, undocumented dependency
-the manifest never declared), and `unused-q` is `NOT_OBSERVED_IN_WINDOW`:
-
-![Service Explorer showing OrderService's declared vs. observed dependencies: ProductService and payment-q are CONFIRMED, LegacyPricingService is OBSERVED_ONLY, and unused-q is NOT_OBSERVED_IN_WINDOW.](images/runtime-demo-drift.png)
+The Service Explorer shows the same declared-vs-observed states illustrated in
+[What you'll see](#what-youll-see), while the walkthrough above explains how each state is produced.
 
 ## Natural Language Queries
 
