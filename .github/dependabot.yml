@@ -1,0 +1,25 @@
+# H5 spec §28: keep pip/GitHub Actions/Docker dependencies current.
+# "pip" in the spec means "this project's Python dependency manifest" - the actual manifest here
+# is pyproject.toml + uv.lock (spec §3 mandates uv as the package manager), so the ecosystem below
+# is "uv" (GA since Dependabot 2025-03), the value that actually reads uv.lock, not "pip".
+version: 2
+updates:
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "docker"
+    directory: "/examples/runtime-demo"
+    schedule:
+      interval: "weekly"

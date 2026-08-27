@@ -1257,6 +1257,66 @@ blocking if broken - not just read about them.
   - CI/CD, CodeQL, container scanning, GHCR publishing (12D); CONTRIBUTING/SECURITY/CODE_OF_CONDUCT/
     SUPPORT/issue and PR templates/good-first-issues (12E); CHANGELOG/ROADMAP/release tag (12F).
 
+## Iteration 12D — CI/CD & Security (Open Source Readiness)
+`Architecture_Intelligence_Platform_H5_Open_Source_Readiness_Specification.md` §26-31 (GitHub
+Actions CI, Docker build workflow, Dependabot, `pip-audit`, CodeQL, Trivy container scanning), §50
+(Release Gate). Fourth of six H5 sub-iterations; 12A/12B/12C (`e641370`/`99cb48c`/`b233e40`) were
+committed before this one.
+
+**Exit criterion:** pushing a commit or opening a PR actually runs lint + the full unit/integration
+baseline + a dependency audit; tagging/publishing a release actually builds, scans, and publishes an
+image to GHCR; static analysis and dependency-update PRs run on a schedule - all as real, working
+GitHub Actions, not just described.
+
+- `.github/workflows/ci.yml` - spec §26's exact pipeline (checkout -> `uv sync` -> `ruff check` ->
+  `ruff format --check` -> unit tests -> integration tests) as one job, plus a second
+  `dependency-audit` job (spec §29) running `uv run --with pip-audit pip-audit` *inside* the
+  project's synced venv (auditing packages actually installed here, not `pip-audit`'s own ephemeral
+  tool env - verified locally: `uvx pip-audit` alone audits the wrong environment and would
+  silently report clean regardless of this project's actual dependencies). Both jobs run on every
+  `push`/`pull_request`, so a dependency CVE gets fast, unavoidable feedback (unlike Trivy below).
+  Verified locally before committing: `uv run ruff check .`, `uv run ruff format --check .`,
+  `uv run pytest tests/unit` (352 passed), and `uv run --with pip-audit pip-audit` ("No known
+  vulnerabilities found") all green as of this iteration.
+- **Found and fixed a real problem by actually running these commands, not just writing the
+  workflow**: `ruff format --check .` failed before this iteration - ruff 0.16 formats Markdown
+  code fences by default, and it wanted to rewrite `Protocol` stub bodies (`def f(...) -> str:
+  ...`) inside the frozen historical spec documents (`Architecture_Intelligence_Platform_Core_
+  Hardening_Specification.md`, the H5 spec itself, `docs/specifications/*.md`). Fixed by adding
+  `extend-exclude = ["*.md"]` to `[tool.ruff]` in `pyproject.toml` - this repo's Markdown is docs/
+  specs, not code, and auto-reformatting a frozen design document's embedded snippets is not a goal
+  here. `ruff format --check .` now matches `docs/development.md`'s already-documented command
+  (`uv run ruff format .`) with no doc change needed.
+- `.github/workflows/codeql.yml` - spec §30's minimum (`python`, `actions`), `build-mode: none` for
+  both (interpreted/no compilation step), on push/PR to `main` plus a weekly schedule.
+- `.github/workflows/docker.yml` - spec §27, triggered on `release: published` or a `v*` tag push:
+  builds the root `Dockerfile` image, tags it `<ref>` and `latest`, pushes to
+  `ghcr.io/<owner>/<repo>` (lowercased explicitly - `github.repository` preserves this repo's actual
+  mixed case, which GHCR rejects), then runs Trivy (spec §31) against the pushed image and uploads
+  SARIF to the Security tab. Trivy's `exit-code` is deliberately `0` (report, don't block) - unlike
+  `dependency-audit` above, this only runs at release time, and hard-failing a release over an
+  unfixed base-image (`python:3.13-slim`/`neo4j:5`) CVE the maintainer doesn't control would be
+  impractical; spec §29/§50 both say "no *unreviewed* critical finding", not "zero findings", and
+  the SARIF upload is what makes it reviewed rather than silently ignored.
+- `.github/dependabot.yml` - spec §28's three ecosystems, weekly. Deliberately uses
+  `package-ecosystem: "uv"`, not the spec's literal `"pip"` wording - confirmed via GitHub's own
+  changelog that Dependabot's `uv` ecosystem (reading `pyproject.toml` + `uv.lock` directly) reached
+  general availability 2025-03-13, which is what this project (spec §3 mandates `uv`) actually
+  needs; the classic `pip` ecosystem doesn't resolve `uv.lock`. Two `docker` entries (root
+  `Dockerfile` and `examples/runtime-demo/Dockerfile`) cover both images in this repo.
+- Every third-party Action is pinned to its exact current release tag rather than a floating major
+  (e.g. `astral-sh/setup-uv@v10.0.1`, not `@v7`) - checked directly against each repo's GitHub API
+  `tags` listing rather than assumed, because `setup-uv` specifically turned out to have *stopped*
+  moving its floating major tag at `v7` while shipping real releases up to `v10.0.1` - using `@v7`
+  would have silently pinned CI to a stale, unmaintained tag.
+- No application code touched - 352 unit / (integration suite unchanged, not re-run this iteration
+  since nothing in `app/` changed) tests still green per the ruff/pip-audit checks above.
+- Explicitly out of scope (later H5 iterations per spec §52): `CONTRIBUTING.md`/`SECURITY.md`/
+  `CODE_OF_CONDUCT.md`/`SUPPORT.md`/issue and PR templates/good-first-issues/Discussions (12E);
+  CHANGELOG/ROADMAP/the version tag and actual release/announcement (12F). CI badges were
+  deliberately not added to `README.md` - this repository has no `git remote` configured yet, so
+  there is no real `owner/repo` path to point a badge at without fabricating one.
+
 ## Getting started
 
 Iterations 0 and 1 need no Neo4j/Docker and can start immediately:

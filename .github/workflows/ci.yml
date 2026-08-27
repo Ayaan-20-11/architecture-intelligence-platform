@@ -1,0 +1,60 @@
+name: CI
+
+# H5 spec §26: checkout -> Python setup -> {dependency install, ruff check, ruff format --check,
+# unit tests, integration tests}. Must run the full H1-H4 + 11H test baseline (spec doesn't pin an
+# exact test count - see IMPLEMENTATION_PLAN.md for the current count per iteration).
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: lint + test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: ruff check
+        run: uv run ruff check .
+
+      - name: ruff format --check
+        run: uv run ruff format --check .
+
+      - name: Unit tests
+        run: uv run pytest tests/unit
+
+      # Testcontainers-backed - needs Docker, which is preinstalled on ubuntu-latest runners.
+      - name: Integration tests
+        run: uv run pytest tests/integration
+
+  dependency-audit:
+    name: dependency security scan (pip-audit, spec §29)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      # Runs inside the project's synced venv so it audits the packages actually installed here,
+      # not pip-audit's own ephemeral tool environment.
+      - name: pip-audit
+        run: uv run --with pip-audit pip-audit

@@ -26,6 +26,10 @@ dev = [
 
 [tool.ruff]
 line-length = 100
+# Markdown isn't a formatting target here - this repo's *.md files are docs/frozen design specs,
+# not code, and ruff's Markdown code-fence formatting would otherwise rewrite Python snippets
+# embedded in historical spec documents (e.g. Protocol stub bodies) for no benefit.
+extend-exclude = ["*.md"]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body"]
