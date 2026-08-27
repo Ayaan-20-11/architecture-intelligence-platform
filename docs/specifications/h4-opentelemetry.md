@@ -3,26 +3,26 @@
 
 **Version:** 0.3  
 **Status:** Implementation Specification  
-**Basis:** PoC Iterations 0–10C / H1–H3 abgeschlossen  
-**Technologie:** Python 3.13, FastAPI, Pydantic, Neo4j, OpenTelemetry Collector  
-**Scope:** Ergänzung des bestehenden Evidence-backed Architecture Knowledge Graph um tatsächlich beobachtete Runtime-Beziehungen
+**Basis:** PoC Iterations 0–10C / H1–H3 completed  
+**Technology:** Python 3.13, FastAPI, Pydantic, Neo4j, OpenTelemetry Collector  
+**Scope:** Extending the existing Evidence-backed Architecture Knowledge Graph with actually observed runtime relationships
 
 ---
 
-## 1. Ausgangslage
+## 1. Starting Point
 
-Nach Abschluss von H1–H3 besitzt die Plattform:
+After completing H1–H3, the platform has:
 
-- einen Evidence-backed Architecture Knowledge Graph,
-- vollständige Provenance für deklarierte Architekturbeziehungen,
-- deterministische Analysen A1–A5,
-- einen Intent Router, der bekannte Fragestellungen ohne LLM beantwortet,
-- einen Security Validator für Cypher,
-- einen Semantic Query Validator für Domain/Range-Beziehungen.
+- an Evidence-backed Architecture Knowledge Graph,
+- complete provenance for declared architecture relationships,
+- deterministic analyses A1–A5,
+- an Intent Router that answers known questions without an LLM,
+- a Security Validator for Cypher,
+- a Semantic Query Validator for domain/range relationships.
 
-Alle H1-, H2- und H3-Kriterien sind erfüllt. Die aktuelle Testsuite umfasst **300 erfolgreiche Tests**, davon 221 Unit- und 79 Neo4j/Testcontainers-Integrationstests.
+All H1, H2, and H3 criteria are met. The current test suite comprises **300 passing tests**, of which 221 are unit tests and 79 are Neo4j/Testcontainers integration tests.
 
-Der bestehende Zustand entspricht damit:
+The current state thus corresponds to:
 
 \[
 \boxed{
@@ -36,23 +36,23 @@ Constrained\ LLM
 }
 \]
 
-Die Hardening-Iteration hat insbesondere erreicht, dass Fakten auf ihre Quelle zurückgeführt werden können, bekannte Fragestellungen deterministisch beantwortet werden und semantisch falsche Graphbeziehungen nicht mehr bis Neo4j gelangen.
+In particular, the hardening iteration achieved that facts can be traced back to their source, known questions are answered deterministically, and semantically incorrect graph relationships no longer reach Neo4j.
 
-H4 ergänzt nun:
+H4 now adds:
 
 \[
 \boxed{OBSERVED}
 \]
 
-Architecture Evidence aus OpenTelemetry.
+Architecture Evidence from OpenTelemetry.
 
 ---
 
-## 2. Zielsetzung
+## 2. Objective
 
-H4 soll die bestehende deklarierte Architektur mit der **tatsächlich zur Laufzeit beobachteten Architektur** verbinden.
+H4 is meant to connect the existing declared architecture with the **architecture actually observed at runtime**.
 
-Aus:
+From:
 
 ```text
 OpenAPI
@@ -63,7 +63,7 @@ Manifest
 DECLARED Architecture
 ```
 
-wird:
+it becomes:
 
 ```text
                     Architecture Knowledge Graph
@@ -78,7 +78,7 @@ wird:
                         Architecture Fact
 ```
 
-Damit sollen insbesondere drei Zustände unterscheidbar werden:
+In particular, this should make three states distinguishable:
 
 \[
 \boxed{DECLARED\_ONLY}
@@ -92,7 +92,7 @@ Damit sollen insbesondere drei Zustände unterscheidbar werden:
 \boxed{CONFIRMED}
 \]
 
-Beispiel:
+Example:
 
 ```text
 OrderService
@@ -115,9 +115,9 @@ CONFIRMED
 
 ---
 
-## 3. Kernhypothese von H4
+## 3. Core Hypothesis of H4
 
-Die zentrale Hypothese lautet:
+The central hypothesis is:
 
 \[
 \boxed{
@@ -127,25 +127,25 @@ ObservedArchitecture
 }
 \]
 
-und gerade ihre Differenz enthält wertvolles Architekturwissen.
+and it is precisely their difference that contains valuable architectural knowledge.
 
-Insbesondere:
+In particular:
 
 \[
 Observed-Declared
 \]
 
-findet potenziell **undokumentierte reale Abhängigkeiten**.
+potentially finds **undocumented real dependencies**.
 
-Dagegen liefert:
+Conversely:
 
 \[
 Declared-Observed
 \]
 
-Beziehungen, für die innerhalb eines definierten Beobachtungsfensters keine Laufzeitevidenz vorhanden ist.
+yields relationships for which no runtime evidence exists within a defined observation window.
 
-Wichtig:
+Important:
 
 \[
 Declared-Observed
@@ -153,47 +153,47 @@ Declared-Observed
 obsolete.
 \]
 
-„Nicht beobachtet“ darf nicht automatisch als „ungenutzt“ oder „veraltet“ interpretiert werden.
+"Not observed" must not automatically be interpreted as "unused" or "obsolete."
 
 ---
 
 ## 4. Scope
 
-### 4.1 Bestandteil von H4
+### 4.1 Part of H4
 
-H4 unterstützt:
+H4 supports:
 
 - OpenTelemetry Traces,
-- Service-Identifikation,
-- REST Client-/Server-Kommunikation,
-- Queue-basierte Messaging-Kommunikation,
+- Service identification,
+- REST client/server communication,
+- Queue-based messaging communication,
 - Observed Evidence,
-- Zeitfenster,
-- Umgebungen,
-- Matching zu vorhandenen Graph-Entities,
-- Erstellung beobachteter, bislang unbekannter Architektur-Fakten,
-- Vergleich `DECLARED` vs. `OBSERVED`,
-- deterministische Runtime-Analysen.
+- Time windows,
+- Environments,
+- Matching to existing graph entities,
+- Creation of observed, previously unknown architecture facts,
+- Comparison of `DECLARED` vs. `OBSERVED`,
+- Deterministic runtime analyses.
 
-### 4.2 Nicht Bestandteil von H4
+### 4.2 Not Part of H4
 
-Bewusst nicht implementiert werden:
+Deliberately not implemented:
 
 - Metrics,
 - Logs,
-- Speicherung vollständiger Traces in Neo4j,
-- Trace-Waterfall-UI,
-- vollständiger Event-/Causality-Graph,
-- Vector Database,
+- Storage of complete traces in Neo4j,
+- Trace waterfall UI,
+- Full event/causality graph,
+- Vector database,
 - GraphRAG,
-- Architecture Wiki,
-- Anomaly Detection durch ML,
-- automatische Architekturänderungen,
-- SLO-Auswertung,
-- Performance-Analyse,
-- Langzeit-Telemetriespeicher.
+- Architecture wiki,
+- Anomaly detection via ML,
+- Automatic architecture changes,
+- SLO evaluation,
+- Performance analysis,
+- Long-term telemetry storage.
 
-H4 ist:
+H4 is:
 
 \[
 \boxed{
@@ -201,11 +201,11 @@ Runtime\ Architecture\ Discovery
 }
 \]
 
-und **kein Observability Backend**.
+and **not an observability backend**.
 
 ---
 
-## 5. Architektur
+## 5. Architecture
 
 ```text
                      MICROSERVICES
@@ -244,15 +244,15 @@ und **kein Observability Backend**.
                                                 Comparison
 ```
 
-Der OpenTelemetry Collector soll die vorhandene Observability-Lösung **nicht ersetzen**.
+The OpenTelemetry Collector is not meant to **replace** the existing observability solution.
 
-Architecture Intelligence ist lediglich ein zusätzlicher Telemetry Consumer.
+Architecture Intelligence is merely an additional telemetry consumer.
 
 ---
 
 ## 6. OpenTelemetry Collector
 
-Der Collector bildet die Grenze zwischen den instrumentierten Services und der Architecture Intelligence Platform.
+The Collector forms the boundary between the instrumented services and the Architecture Intelligence Platform.
 
 ```text
 Microservices
@@ -262,37 +262,37 @@ Microservices
     v
 OpenTelemetry Collector
     |
-    +----> Jaeger / Tempo / bestehendes Backend
+    +----> Jaeger / Tempo / existing backend
     |
     +----> Architecture Intelligence
 ```
 
-Damit bleibt die Architekturplattform unabhängig davon, welches Trace Backend produktiv verwendet wird.
+This keeps the architecture platform independent of whichever trace backend is used in production.
 
 ---
 
-## 7. Unterstützte Signale
+## 7. Supported Signals
 
-H4 verarbeitet ausschließlich:
+H4 processes exclusively:
 
 ```text
 TRACE / SPAN
 ```
 
-Nicht verarbeitet werden:
+Not processed:
 
 ```text
 METRIC
 LOG
 ```
 
-Die Architekturinformation entsteht aus Operationen **zwischen Systemkomponenten**, die OpenTelemetry als Spans beschreibt.
+Architecture information arises from operations **between system components**, as described by OpenTelemetry through spans.
 
 ---
 
 ## 8. OTLP Ingestion
 
-Neue Komponente:
+New component:
 
 ```text
 app/
@@ -300,26 +300,26 @@ app/
       otlp_receiver.py
 ```
 
-Primärer Eingang:
+Primary entry point:
 
 ```text
 POST /v1/traces
 ```
 
-Unterstütztes Format für H4:
+Format supported for H4:
 
 ```text
 OTLP/HTTP
 application/x-protobuf
 ```
 
-Der Receiver dekodiert die Traces mit den OpenTelemetry-Protobuf-Typen und transformiert sie anschließend in ein internes Modell.
+The receiver decodes the traces using the OpenTelemetry protobuf types and then transforms them into an internal model.
 
 ---
 
-## 9. Keine direkte Graph-Persistenz aus OTLP
+## 9. No Direct Graph Persistence from OTLP
 
-Es gilt weiterhin das zentrale Architekturprinzip:
+The central architectural principle continues to apply:
 
 ```text
 External Format
@@ -331,13 +331,13 @@ Canonical Representation
 Neo4j
 ```
 
-also **nicht**:
+in other words, **not**:
 
 ```text
 OTLP -> Neo4j
 ```
 
-sondern:
+but rather:
 
 ```text
 OTLP
@@ -365,7 +365,7 @@ Neo4j
 
 ## 10. Observation Model
 
-Neue Pydantic-Strukturen:
+New Pydantic structures:
 
 ```python
 class RuntimeSpan(BaseModel):
@@ -389,27 +389,27 @@ class RuntimeSpan(BaseModel):
     attributes: dict[str, Any]
 ```
 
-Diese Struktur ist nur ein temporäres Ingestion-Modell.
+This structure is only a temporary ingestion model.
 
-Sie wird **nicht als Node in Neo4j gespeichert**.
+It is **not stored as a node in Neo4j**.
 
 ---
 
 ## 11. Service Identity
 
-Primäre Service-ID aus OpenTelemetry ist:
+The primary Service ID from OpenTelemetry is:
 
 ```text
 service.name
 ```
 
-optional ergänzt durch:
+optionally supplemented by:
 
 ```text
 service.namespace
 ```
 
-Daher gilt:
+Hence:
 
 ```text
 service.name = PaymentService
@@ -419,7 +419,7 @@ instance 2 ├──> one Service node
 instance 3 ┘
 ```
 
-Nicht:
+Not:
 
 ```text
 PaymentService-1
@@ -431,14 +431,14 @@ PaymentService-3
 
 ## 12. Service Resolver
 
-Neue Komponente:
+New component:
 
 ```text
 telemetry/
     service_resolver.py
 ```
 
-Aufgabe:
+Task:
 
 ```text
 OTel Resource
@@ -450,30 +450,30 @@ Service Identity
 Existing Graph Service
 ```
 
-Matching-Reihenfolge:
+Matching order:
 
 1. `service.namespace + service.name`
 2. `service.name`
-3. konfigurierter Alias
-4. ansonsten observed-only Service.
+3. configured alias
+4. otherwise, observed-only Service.
 
 ---
 
 ## 13. Observed-only Services
 
-Wird beispielsweise beobachtet:
+If, for example, the following is observed:
 
 ```text
 service.name = FraudService
 ```
 
-aber im deklarativen Graph existiert kein Service, wird ein neuer:
+but no Service exists for it in the declarative graph, a new:
 
 ```text
 (:Service)
 ```
 
-erzeugt.
+is created.
 
 Properties:
 
@@ -483,39 +483,39 @@ name
 discoveryStatus = OBSERVED_ONLY
 ```
 
-Dazu gehört ausschließlich `OBSERVED` Evidence.
+It carries exclusively `OBSERVED` Evidence.
 
-Das ermöglicht die Analyse:
+This enables the analysis:
 
-> Welche Services existieren zur Laufzeit, sind aber in keinem Architekturartefakt bekannt?
+> Which services exist at runtime but are not known in any architecture artifact?
 
 ---
 
 ## 14. Environment
 
-Runtime-Architektur muss nach Umgebung getrennt werden.
+Runtime architecture must be separated by environment.
 
-Primär verwendet wird:
+The primary attribute used is:
 
 ```text
 deployment.environment.name
 ```
 
-Also:
+So:
 
 ```text
 PaymentService
 ```
 
-bleibt ein Service.
+remains a single Service.
 
-Die Beobachtung besitzt:
+The observation carries:
 
 ```text
 environment = production
 ```
 
-oder:
+or:
 
 ```text
 environment = staging
@@ -523,16 +523,16 @@ environment = staging
 
 ---
 
-## 15. Evidence-Modell erweitern
+## 15. Extending the Evidence Model
 
-Bestehend:
+Existing:
 
 ```python
 class EvidenceType(StrEnum):
     DECLARED = "DECLARED"
 ```
 
-wird:
+becomes:
 
 ```python
 class EvidenceType(StrEnum):
@@ -554,7 +554,7 @@ class SourceType(StrEnum):
 
 ## 16. Observed Evidence
 
-Observed Evidence erweitert die bisherigen Provenance-Daten.
+Observed Evidence extends the existing provenance data.
 
 ```python
 class ObservedEvidence(Evidence):
@@ -577,33 +577,31 @@ class ObservedEvidence(Evidence):
 
 ## 17. Evidence Buckets
 
-Ein wichtiger Entwurfsentscheid:
+An important design decision:
 
-**Nicht jeder Span erzeugt einen Evidence Node.**
+**Not every span creates an Evidence node.**
 
-Bei beispielsweise:
-
-```text
-20.000 REST-Aufrufen / Stunde
-```
-
-dürfen nicht:
+For example, with:
 
 ```text
-20.000 Evidence Nodes
+20,000 REST calls / hour
 ```
 
-entstehen.
+this must not result in:
 
-Stattdessen wird aggregiert.
+```text
+20,000 Evidence Nodes
+```
 
-Für den PoC:
+Instead, aggregation is used.
+
+For the PoC:
 
 \[
 bucket=1\ day.
 \]
 
-Beispiel:
+Example:
 
 ```text
 evidence:otel:production:2026-08-26:<fact-hash>
@@ -620,15 +618,15 @@ sampleTraceIds
 
 ---
 
-## 18. Begrenzte Trace Samples
+## 18. Limited Trace Samples
 
-Ein Evidence Node speichert maximal:
+An Evidence node stores at most:
 
 ```text
 5 trace IDs
 ```
 
-beispielsweise:
+for example:
 
 ```json
 {
@@ -640,31 +638,31 @@ beispielsweise:
 }
 ```
 
-Damit bleibt eine Stichprobe zur technischen Nachprüfung verfügbar.
+This keeps a sample available for technical verification.
 
-Der Architecture Graph wird jedoch **kein Trace Store**.
+The Architecture Graph, however, does **not** become a trace store.
 
 ---
 
 ## 19. Observation Count
 
-`observationCount` dient als Hinweis:
+`observationCount` serves as an indicator:
 
 ```text
 CALLS relation observed approximately 12,431 times
 ```
 
-Nicht als Billing-/Monitoring-Metrik.
+not as a billing/monitoring metric.
 
-OTLP-Wiederholungen können zu Mehrfachzählung führen.
+OTLP retries can lead to overcounting.
 
-Daher:
+Therefore:
 
 \[
 observationCount=best\ effort.
 \]
 
-Für die Architekturklassifikation genügt:
+For architecture classification purposes, it is sufficient that:
 
 \[
 count>0.
@@ -674,9 +672,9 @@ count>0.
 
 ## 20. REST – Observed Architecture
 
-REST-Kommunikation wird primär aus HTTP Client-/Server-Spans abgeleitet.
+REST communication is primarily derived from HTTP client/server spans.
 
-Beispiel:
+Example:
 
 ```text
 OrderService
@@ -693,7 +691,7 @@ SERVER span:
 GET /products/{id}
 ```
 
-Daraus:
+From this:
 
 ```text
 OrderService
@@ -715,7 +713,7 @@ plus `OBSERVED` Evidence.
 
 ## 21. REST Provider Resolution
 
-Die zuverlässigste Zuordnung entsteht über korrelierte Client-/Server-Spans:
+The most reliable mapping arises from correlated client/server spans:
 
 ```text
 Client Span
@@ -726,21 +724,21 @@ Client Span
 Server Span
 ```
 
-Der Server Span besitzt:
+The server span carries:
 
 ```text
 resource.service.name
 ```
 
-und identifiziert damit den tatsächlichen Ziel-Service.
+and thereby identifies the actual target service.
 
-Dadurch muss nicht aus Hostnamen geraten werden.
+As a result, there is no need to guess based on hostnames.
 
 ---
 
 ## 22. HTTP Operation Resolution
 
-Operation Identity:
+Operation identity:
 
 ```text
 provider service
@@ -750,13 +748,13 @@ HTTP method
 route/template
 ```
 
-Beispiel:
+Example:
 
 ```text
 operation:product-service:GET:/products/{id}
 ```
 
-Verwendete Attribute:
+Attributes used:
 
 ```text
 http.request.method
@@ -764,53 +762,53 @@ http.route
 url.template
 ```
 
-Daher darf beispielsweise:
+Consequently, for example:
 
 ```text
 /products/4711
 ```
 
-nicht automatisch einen neuen `Operation`-Node erzeugen.
+must not automatically create a new `Operation` node.
 
 ---
 
 ## 23. REST Mapping
 
-### Fall A – bestehende deklarierte Operation
+### Case A – existing declared operation
 
 ```text
 GET /products/{id}
 ```
 
-existiert bereits aus OpenAPI.
+already exists from OpenAPI.
 
-Dann:
+In that case:
 
 ```text
 OrderService -[:CALLS]-> Operation
 ```
 
-erhält zusätzliche:
+receives additional:
 
 ```text
 OBSERVED Evidence
 ```
 
-### Fall B – Operation beobachtet, aber nicht deklariert
+### Case B – operation observed, but not declared
 
-Wenn ein stabiles Route/Template vorhanden ist:
+If a stable route/template is available:
 
 ```text
 GET /internal/products/{id}
 ```
 
-kann ein:
+an:
 
 ```text
 Observed-only Operation
 ```
 
-erzeugt werden.
+can be created.
 
 Status:
 
@@ -818,25 +816,25 @@ Status:
 OBSERVED_ONLY
 ```
 
-### Fall C – keine stabile Route
+### Case C – no stable route
 
-Nur:
+Only:
 
 ```text
 /products/4711
 ```
 
-bekannt.
+is known.
 
-Dann:
+In that case:
 
 ```text
 UNRESOLVED observation
 ```
 
-und **kein Operation Node**.
+and **no Operation node**.
 
-Dies verhindert:
+This prevents:
 
 ```text
 /products/4711
@@ -845,13 +843,13 @@ Dies verhindert:
 ...
 ```
 
-als Graphknoten.
+from becoming graph nodes.
 
 ---
 
 ## 24. Messaging / Queue Architecture
 
-Der bestehende Graph besitzt:
+The existing graph has:
 
 ```text
 Service -[:SENDS]-> Queue
@@ -859,13 +857,13 @@ Service -[:SENDS]-> Queue
 Service -[:RECEIVES_FROM]-> Queue
 ```
 
-Diese Relationen werden aus OpenTelemetry Messaging Spans bestätigt oder neu entdeckt.
+These relations are confirmed or newly discovered from OpenTelemetry messaging spans.
 
 ---
 
 ## 25. Queue SEND Detection
 
-Ein Producer-/Send-Span wie:
+A producer/send span such as:
 
 ```text
 service.name = OrderService
@@ -875,7 +873,7 @@ messaging.destination.name = payment-q
 messaging.operation.type = send
 ```
 
-führt zu:
+leads to:
 
 ```text
 OrderService
@@ -886,7 +884,7 @@ OrderService
  payment-q
 ```
 
-mit:
+with:
 
 ```text
 OBSERVED Evidence
@@ -896,7 +894,7 @@ OBSERVED Evidence
 
 ## 26. Queue RECEIVE Detection
 
-Consumer-/Process-Spans:
+Consumer/process spans:
 
 ```text
 service.name = PaymentService
@@ -905,13 +903,13 @@ messaging.destination.name = payment-q
 messaging.operation.type = receive
 ```
 
-oder:
+or:
 
 ```text
 process
 ```
 
-führen zu:
+lead to:
 
 ```text
 PaymentService
@@ -922,13 +920,13 @@ RECEIVES_FROM
  payment-q
 ```
 
-mit `OBSERVED` Evidence.
+with `OBSERVED` Evidence.
 
 ---
 
 ## 27. Queue Identity
 
-Queue Identity wird bestimmt aus:
+Queue identity is determined from:
 
 ```text
 messaging.system
@@ -938,15 +936,15 @@ broker/system instance
 messaging.destination.name
 ```
 
-Beispiel:
+Example:
 
 ```text
 queue:<system>:<namespace>:payment-q
 ```
 
-Dabei soll derselbe ID-Generator verwendet werden wie beim AsyncAPI-Importer.
+The same ID generator as used by the AsyncAPI importer should be used here.
 
-Ziel:
+Goal:
 
 ```text
 AsyncAPI Queue
@@ -954,13 +952,13 @@ AsyncAPI Queue
 OpenTelemetry Queue
 ```
 
-und nicht zwei parallele Nodes.
+and not two parallel nodes.
 
 ---
 
 ## 28. Messaging Destination Resolver
 
-Neue Komponente:
+New component:
 
 ```text
 telemetry/
@@ -969,22 +967,22 @@ telemetry/
 
 Matching:
 
-1. exakte Canonical Queue ID,
-2. Messaging-System + Destination Name,
-3. konfigurierter Namespace/Alias,
-4. sonst observed-only Queue.
+1. exact Canonical Queue ID,
+2. messaging system + destination name,
+3. configured namespace/alias,
+4. otherwise, observed-only Queue.
 
 ---
 
 ## 29. Observed-only Queue
 
-Wird beobachtet:
+If the following is observed:
 
 ```text
 legacy-payment-q
 ```
 
-aber ist nirgendwo in AsyncAPI vorhanden:
+but it does not exist anywhere in AsyncAPI:
 
 ```text
 (:Queue {
@@ -993,77 +991,73 @@ aber ist nirgendwo in AsyncAPI vorhanden:
 })
 ```
 
-mit:
+with:
 
 ```text
 OBSERVED Evidence
 ```
 
-Damit wird unmittelbar:
+This immediately makes:
 
 \[
 Observed-Declared
 \]
 
-sichtbar.
+visible.
 
 ---
 
-## 30. Message-Typen
+## 30. Message Types
 
-OpenTelemetry liefert nicht zwingend den fachlichen Message-Typ, der in AsyncAPI als:
+OpenTelemetry does not necessarily provide the domain-level message type that is modeled in AsyncAPI as:
 
 ```text
 PaymentRequested
 ```
 
-modelliert wird.
-
-Daher ist H4 zunächst auf:
+Therefore, H4 is initially limited to:
 
 ```text
 Service -> Queue
 ```
 
-beschränkt.
-
-Nicht garantiert wird:
+Not guaranteed:
 
 ```text
 Service -> exact Message Type
 ```
 
-Eine spätere Erweiterung kann ein projektspezifisches Low-Cardinality-Attribut einführen, beispielsweise:
+A later extension could introduce a project-specific low-cardinality attribute, for example:
 
 ```text
 architecture.message.type
 ```
 
-Dies ist **nicht Bestandteil von H4**.
+This is **not part of H4**.
 
 ---
 
-## 31. Keine Payloads
+## 31. No Payloads
 
-Nicht gespeichert werden:
+Not stored:
 
-- Message Body,
-- HTTP Request Body,
-- HTTP Response Body,
-- Authorization Header,
+- Message body,
+- HTTP request body,
+- HTTP response body,
+- Authorization header,
 - Cookies,
-- Query Parameter,
-- personenbezogene Werte,
-- vollständige URLs,
-- Exception Stack Traces.
+- Query parameters,
+- Personal data values,
+- Full URLs,
+- Exception stack traces.
 
-Architecture Intelligence verwendet eine explizite **Attribute Allowlist**.
+Architecture Intelligence uses an explicit **attribute allowlist**.
 
 ---
 
 ## 32. Attribute Allowlist
 
-REST beispielsweise:
+REST, for example:
 
 ```text
 service.name
@@ -1101,9 +1095,9 @@ messaging.operation.type
 
 ## 33. OpenTelemetry Semantic Convention Versioning
 
-Der Adapter darf keine OTel-Attributnamen quer über den Code verteilen.
+The adapter must not scatter OTel attribute names throughout the code.
 
-Neue Komponente:
+New component:
 
 ```text
 telemetry/
@@ -1113,13 +1107,13 @@ telemetry/
         resources.py
 ```
 
-Damit können unterschiedliche Semantic-Convention-Versionen zentral normalisiert werden.
+This allows different semantic convention versions to be normalized centrally.
 
 ---
 
 ## 34. ObservedFactCandidate
 
-Canonical Runtime Model:
+Canonical runtime model:
 
 ```python
 class ObservedFactCandidate(BaseModel):
@@ -1138,7 +1132,7 @@ class ObservedFactCandidate(BaseModel):
     evidence: ObservedEvidence
 ```
 
-Beispiel:
+Example:
 
 ```text
 subject:
@@ -1162,7 +1156,7 @@ class ObservationBatch(BaseModel):
     unresolved: list[UnresolvedObservation]
 ```
 
-Damit bleibt die Telemetry-Pipeline ähnlich zum bisherigen Adapter-Modell:
+This keeps the telemetry pipeline similar to the existing adapter model:
 
 ```text
 Source
@@ -1178,37 +1172,37 @@ Graph
 
 ## 36. Observation Aggregator
 
-Neue Komponente:
+New component:
 
 ```text
 telemetry/
     aggregator.py
 ```
 
-Aufgaben:
+Tasks:
 
-1. Fact normalisieren,
-2. Evidence Bucket bestimmen,
-3. vorhandene Relation suchen,
-4. `OBSERVED` Evidence hinzufügen,
-5. Counter aktualisieren,
-6. `first_seen` / `last_seen` aktualisieren,
-7. Trace-Samples begrenzen.
+1. Normalize fact,
+2. Determine Evidence bucket,
+3. Look up existing relation,
+4. Add `OBSERVED` Evidence,
+5. Update counter,
+6. Update `first_seen` / `last_seen`,
+7. Limit trace samples.
 
 ---
 
-## 37. Keine neuen Relationstypen für Observed
+## 37. No New Relation Types for Observed
 
-Wichtige Designentscheidung:
+Important design decision:
 
-Nicht:
+Not:
 
 ```text
 OBSERVED_CALLS
 DECLARED_CALLS
 ```
 
-sondern weiterhin:
+but rather, still:
 
 ```text
 CALLS
@@ -1216,9 +1210,9 @@ SENDS
 RECEIVES_FROM
 ```
 
-Die Evidenz entscheidet über den Status.
+The evidence determines the status.
 
-Beispiel:
+Example:
 
 ```text
 OrderService -[:CALLS]-> getProduct
@@ -1241,9 +1235,9 @@ CONFIRMED
 
 ## 38. Fact Status
 
-Der Status wird **abgeleitet**, nicht als primäre Wahrheit gespeichert.
+The status is **derived**, not stored as the primary source of truth.
 
-Für Fakt \(F\):
+For fact \(F\):
 
 \[
 D(F)=
@@ -1259,7 +1253,7 @@ EvidenceType(e)=OBSERVED
 \land environment(e)=E
 \]
 
-Dann:
+Then:
 
 \[
 D\land O
@@ -1278,31 +1272,31 @@ D\land\neg O
 
 ---
 
-## 39. Beobachtungsfenster
+## 39. Observation Window
 
-Runtime-Fragen benötigen immer ein Zeitfenster.
+Runtime questions always require a time window.
 
-Standard:
+Default:
 
 ```text
 last 24h
 ```
 
-oder konfigurierbar:
+or configurable:
 
 ```text
 7d
 30d
 ```
 
-Beispiel:
+Example:
 
 ```text
 Declared but not observed
 during production / last 7 days
 ```
 
-Nicht:
+Not:
 
 ```text
 Declared but never used
@@ -1310,9 +1304,9 @@ Declared but never used
 
 ---
 
-## 40. Unobserved ist keine negative Evidence
+## 40. Not Observed Is Not Negative Evidence
 
-Fundamentale Regel:
+Fundamental rule:
 
 \[
 \boxed{
@@ -1322,7 +1316,7 @@ evidence\ of\ absence
 }
 \]
 
-Daher dürfen UI und API niemals automatisch formulieren:
+Therefore, the UI and API must never automatically phrase things as:
 
 ```text
 unused
@@ -1330,7 +1324,7 @@ dead
 obsolete
 ```
 
-sondern ausschließlich:
+but exclusively as:
 
 ```text
 NOT_OBSERVED_IN_WINDOW
@@ -1340,9 +1334,9 @@ NOT_OBSERVED_IN_WINDOW
 
 ## 41. Telemetry Coverage
 
-Zur Interpretation wird zusätzlich Coverage ermittelt.
+To aid interpretation, coverage is additionally determined.
 
-Beispiel:
+Example:
 
 ```text
 PaymentService
@@ -1356,13 +1350,13 @@ telemetry:
   messagingObserved: true
 ```
 
-Dadurch kann unterschieden werden zwischen:
+This allows distinguishing between:
 
 ```text
 Relation not observed
 ```
 
-und:
+and:
 
 ```text
 Service emitted no usable telemetry at all
@@ -1370,17 +1364,17 @@ Service emitted no usable telemetry at all
 
 ---
 
-## 42. Analyse O1 – Observed Relations
+## 42. Analysis O1 – Observed Relations
 
-Neue deterministische Analyse:
+New deterministic analysis:
 
-> Welche Architekturbeziehungen wurden tatsächlich beobachtet?
+> Which architecture relationships were actually observed?
 
 ```text
 O1 OBSERVED_RELATIONS
 ```
 
-Filter:
+Filters:
 
 ```text
 environment
@@ -1392,19 +1386,19 @@ timeWindow
 
 ---
 
-## 43. Analyse O2 – Confirmed Architecture
+## 43. Analysis O2 – Confirmed Architecture
 
 ```text
 O2 CONFIRMED_RELATIONS
 ```
 
-Gesucht:
+Sought:
 
 \[
 Declared\cap Observed.
 \]
 
-Beispiel:
+Example:
 
 ```text
 OrderService -> payment-q
@@ -1415,19 +1409,19 @@ OBSERVED OpenTelemetry
 
 ---
 
-## 44. Analyse O3 – Observed but not Declared
+## 44. Analysis O3 – Observed but not Declared
 
 ```text
 O3 OBSERVED_ONLY_RELATIONS
 ```
 
-Gesucht:
+Sought:
 
 \[
 Observed-Declared.
 \]
 
-Beispiel:
+Example:
 
 ```text
 OrderService
@@ -1449,27 +1443,27 @@ OpenAPI/Manifest:
 no
 ```
 
-Ergebnis:
+Result:
 
-> Undokumentierte Runtime-Abhängigkeit.
+> Undocumented runtime dependency.
 
-Dies dürfte die wichtigste H4-Analyse sein.
+This is likely the most important H4 analysis.
 
 ---
 
-## 45. Analyse O4 – Declared but not Observed
+## 45. Analysis O4 – Declared but not Observed
 
 ```text
 O4 DECLARED_ONLY_RELATIONS
 ```
 
-Gesucht:
+Sought:
 
 \[
 Declared-Observed.
 \]
 
-Ausgabe muss immer enthalten:
+The output must always include:
 
 ```text
 environment
@@ -1477,7 +1471,7 @@ observation window
 telemetry coverage
 ```
 
-Beispiel:
+Example:
 
 ```text
 ProductService CALLS PricingService
@@ -1489,21 +1483,21 @@ Coverage: available
 
 Interpretation:
 
-> Keine Beobachtung im angegebenen Zeitraum.
+> No observation within the specified time period.
 
-Nicht:
+Not:
 
 > Dependency is obsolete.
 
 ---
 
-## 46. Analyse O5 – Telemetry Coverage
+## 46. Analysis O5 – Telemetry Coverage
 
 ```text
 O5 TELEMETRY_COVERAGE
 ```
 
-Beispiel:
+Example:
 
 ```text
 OrderService          HTTP ✓ Messaging ✓
@@ -1512,19 +1506,19 @@ InvoiceService        HTTP - Messaging ✓
 LegacyService         no telemetry
 ```
 
-Damit lässt sich die Vertrauenswürdigkeit von O4 einschätzen.
+This allows assessing the trustworthiness of O4.
 
 ---
 
 ## 47. REST API
 
-Neue Endpunkte:
+New endpoints:
 
 ```text
 GET /api/runtime/relations
 ```
 
-Parameter:
+Parameters:
 
 ```text
 environment
@@ -1555,7 +1549,7 @@ GET /api/analysis/runtime/coverage
 
 ---
 
-## 48. Beispiel O3 Response
+## 48. Example O3 Response
 
 ```json
 {
@@ -1582,7 +1576,7 @@ GET /api/analysis/runtime/coverage
 
 ## 49. UI – Service Explorer
 
-Bestehende Seite wird erweitert.
+The existing page is extended.
 
 ```text
 OrderService
@@ -1604,7 +1598,7 @@ SENDS payment-q
 ! CALLS LegacyPricingService
 ```
 
-Legende:
+Legend:
 
 ```text
 ✓ CONFIRMED
@@ -1616,7 +1610,7 @@ Legende:
 
 ## 50. UI – Relation Detail
 
-Beispiel:
+Example:
 
 ```text
 OrderService
@@ -1650,9 +1644,9 @@ observations 12,431
 
 ## 51. Natural-Language Intent Router
 
-Die H3-Architektur bleibt bestehen.
+The H3 architecture remains in place.
 
-Neue deterministische Intents:
+New deterministic intents:
 
 ```python
 OBSERVED_RELATIONS
@@ -1662,27 +1656,27 @@ DECLARED_ONLY_RELATIONS
 TELEMETRY_COVERAGE
 ```
 
-Beispiele:
+Examples:
 
-> Welche undokumentierten REST-Abhängigkeiten wurden in Production beobachtet?
+> Which undocumented REST dependencies were observed in production?
 
 → O3.
 
-> Welche deklarierte Kommunikation wurde in den letzten sieben Tagen nicht beobachtet?
+> Which declared communication was not observed in the last seven days?
 
 → O4.
 
-> Für welche Services haben wir keine Telemetrie?
+> For which services do we have no telemetry?
 
 → O5.
 
-Diese Fragen sollen **kein LLM-generiertes Cypher benötigen**.
+These questions are meant to require **no LLM-generated Cypher**.
 
 ---
 
-## 52. LLM bleibt Fallback
+## 52. LLM Remains a Fallback
 
-Neue Pipeline:
+New pipeline:
 
 ```text
 Question
@@ -1709,15 +1703,15 @@ Intent Router
            Neo4j
 ```
 
-H4 erhöht also nicht die Abhängigkeit vom LLM.
+H4 therefore does not increase reliance on the LLM.
 
 ---
 
 ## 53. Graph Schema Registry
 
-H2 wird um keine parallelen `OBSERVED_*`-Relations erweitert.
+H2 is not extended with parallel `OBSERVED_*` relations.
 
-Die bisherigen Domain/Range-Definitionen bleiben gültig:
+The existing domain/range definitions remain valid:
 
 ```text
 Service -> CALLS -> Operation
@@ -1725,17 +1719,17 @@ Service -> SENDS -> Queue
 Service -> RECEIVES_FROM -> Queue
 ```
 
-Neu ist lediglich:
+The only addition is:
 
 ```text
 EvidenceType = OBSERVED
 ```
 
-Dadurch bleibt Semantic Validation unverändert einsetzbar.
+This keeps Semantic Validation usable unchanged.
 
 ---
 
-## 54. Python-Paketstruktur
+## 54. Python Package Structure
 
 ```text
 app/
@@ -1780,7 +1774,7 @@ app/
 
 ## 55. Docker Compose
 
-PoC-Laufzeit:
+PoC runtime:
 
 ```text
 docker-compose.yml
@@ -1790,7 +1784,7 @@ neo4j
 otel-collector
 ```
 
-Optional existierendes Trace Backend:
+Optional existing trace backend:
 
 ```text
 jaeger / tempo
@@ -1798,7 +1792,7 @@ jaeger / tempo
 
 ---
 
-## 56. Collector-Konzept
+## 56. Collector Concept
 
 ```text
 receivers:
@@ -1812,13 +1806,13 @@ processors
       +---------> architecture-intelligence exporter
 ```
 
-Damit beeinflusst ein Fehler der Architecture Intelligence Platform nicht den normalen Telemetry-Pfad.
+This ensures a failure of the Architecture Intelligence Platform does not affect the normal telemetry path.
 
 ---
 
-## 57. Backpressure / Fehler
+## 57. Backpressure / Failure
 
-Fällt Architecture Intelligence aus:
+If Architecture Intelligence fails:
 
 ```text
 OpenTelemetry Collector
@@ -1828,42 +1822,42 @@ OpenTelemetry Collector
         +---- normal trace backend continues
 ```
 
-Architecture Intelligence darf **nicht zum Single Point of Failure für Observability** werden.
+Architecture Intelligence must **not become a single point of failure for observability**.
 
 ---
 
-## 58. Datenschutz und Sicherheit
+## 58. Privacy and Security
 
-H4 verarbeitet ausschließlich Metadaten, die zur Ermittlung von Architekturbeziehungen notwendig sind.
+H4 processes exclusively the metadata necessary for determining architecture relationships.
 
-Grundsatz:
+Principle:
 
 \[
 \boxed{Minimum\ Telemetry\ Principle}
 \]
 
-Persistiert werden keine:
+Not persisted:
 
 - Payloads,
-- Header,
+- Headers,
 - User IDs,
-- Query Strings,
-- Message Bodies,
-- Stack Traces.
+- Query strings,
+- Message bodies,
+- Stack traces.
 
 ---
 
 ## 59. Retention
 
-Neo4j speichert lediglich aggregierte Observed Evidence.
+Neo4j stores only aggregated Observed Evidence.
 
-PoC-Vorschlag:
+PoC proposal:
 
 ```text
 observed evidence retention = 90 days
 ```
 
-Konfigurierbar:
+Configurable:
 
 ```yaml
 telemetry:
@@ -1876,68 +1870,68 @@ telemetry:
 
 ## 60. Cleanup
 
-Periodischer Job:
+Periodic job:
 
 ```text
 EvidenceCleanupJob
 ```
 
-entfernt:
+removes:
 
 ```text
 OBSERVED Evidence older than retention
 ```
 
-Wenn ein `OBSERVED_ONLY` Fact anschließend überhaupt keine Evidence mehr besitzt, kann er gelöscht werden.
+If an `OBSERVED_ONLY` fact subsequently has no evidence left at all, it can be deleted.
 
-Ein `DECLARED` Fact bleibt erhalten.
+A `DECLARED` fact is retained.
 
 ---
 
 ## 61. Tests – Unit
 
-Neue Unit Tests mindestens für:
+New unit tests at minimum for:
 
 ### OTLP Decoder
 
 - Resource extraction
 - Span extraction
-- malformed payload
+- Malformed payload
 
 ### Service Resolver
 
-- exact match
-- namespace match
-- instance ignored
-- observed-only service
+- Exact match
+- Namespace match
+- Instance ignored
+- Observed-only service
 
 ### HTTP Resolver
 
-- client/server pair
-- existing operation
-- observed-only operation
-- raw URI rejected
+- Client/server pair
+- Existing operation
+- Observed-only operation
+- Raw URI rejected
 
 ### Messaging Resolver
 
 - SEND
 - RECEIVE
 - PROCESS
-- existing queue
-- observed-only queue
+- Existing queue
+- Observed-only queue
 
 ### Aggregator
 
-- bucket aggregation
-- evidence deduplication
-- first/last seen
-- trace sample limit
+- Bucket aggregation
+- Evidence deduplication
+- First/last seen
+- Trace sample limit
 
 ---
 
 ## 62. Integration Tests
 
-Mit:
+With:
 
 ```text
 real Neo4j 5
@@ -1947,7 +1941,7 @@ FastAPI
 OTLP protobuf
 ```
 
-Testpfad:
+Test path:
 
 ```text
 OTLP batch
@@ -1964,9 +1958,9 @@ Neo4j
 
 ---
 
-## 63. Testlandscape
+## 63. Test Landscape
 
-Bestehende Services:
+Existing services:
 
 ```text
 OrderService
@@ -1975,13 +1969,13 @@ PaymentService
 InvoiceService
 ```
 
-Zusätzlich Runtime-Testfälle:
+Additional runtime test cases:
 
 ```text
 OrderService -> ProductService
 ```
 
-deklarativ + beobachtet:
+declared + observed:
 
 ```text
 CONFIRMED
@@ -1991,7 +1985,7 @@ CONFIRMED
 OrderService -> LegacyPricingService
 ```
 
-nur beobachtet:
+observed only:
 
 ```text
 OBSERVED_ONLY
@@ -2001,7 +1995,7 @@ OBSERVED_ONLY
 PaymentService -> invoice-q
 ```
 
-deklarativ, aber im Testfenster nicht beobachtet:
+declared, but not observed within the test window:
 
 ```text
 DECLARED_ONLY
@@ -2011,72 +2005,72 @@ DECLARED_ONLY
 
 ## 64. Regression
 
-Alle bisherigen:
+All existing:
 
 \[
 300
 \]
 
-Tests müssen weiterhin erfolgreich laufen.
+tests must continue to pass.
 
-H4 darf:
+H4 must not:
 
-- H1 Evidence nicht brechen,
-- H2 Semantic Validation nicht umgehen,
-- H3 Intent Routing nicht umgehen.
+- break H1 Evidence,
+- bypass H2 Semantic Validation,
+- bypass H3 Intent Routing.
 
 ---
 
-## 65. H4 Akzeptanzkriterien
+## 65. H4 Acceptance Criteria
 
-| ID | Kriterium |
+| ID | Criterion |
 |---|---|
-| H4.1 | OTLP Trace-Batches können über den Collector ingestiert werden |
-| H4.2 | `service.name` wird korrekt auf logische Service-Nodes gemappt |
-| H4.3 | `service.instance.id` erzeugt keine zusätzlichen Service-Nodes |
-| H4.4 | `deployment.environment.name` trennt Observations nach Umgebung |
-| H4.5 | HTTP Client-/Server-Spans erzeugen beobachtete REST-Beziehungen |
-| H4.6 | vorhandene OpenAPI-Operationen werden korrekt wiederverwendet |
-| H4.7 | Messaging SEND erzeugt/aktualisiert `SENDS` |
-| H4.8 | Messaging RECEIVE/PROCESS erzeugt/aktualisiert `RECEIVES_FROM` |
-| H4.9 | bekannte AsyncAPI-Queues werden wiederverwendet |
-| H4.10 | unbekannte Runtime-Services/Queues können als `OBSERVED_ONLY` angelegt werden |
-| H4.11 | Observed Evidence enthält Environment, FirstSeen, LastSeen und Count |
-| H4.12 | Spans werden aggregiert und nicht einzeln als Neo4j-Nodes gespeichert |
-| H4.13 | `DECLARED ∩ OBSERVED` wird als `CONFIRMED` erkannt |
-| H4.14 | `OBSERVED - DECLARED` wird deterministisch ermittelt |
-| H4.15 | `DECLARED - OBSERVED` wird zeitfensterbezogen ermittelt |
-| H4.16 | `DECLARED_ONLY` wird nicht automatisch als „obsolete“ klassifiziert |
-| H4.17 | Telemetry Coverage ist separat abfragbar |
-| H4.18 | O1–O5 funktionieren vollständig ohne LLM |
-| H4.19 | sensible Span-Attribute werden nicht persistiert |
-| H4.20 | bestehende 300 Tests bleiben grün |
+| H4.1 | OTLP trace batches can be ingested via the Collector |
+| H4.2 | `service.name` is correctly mapped to logical Service nodes |
+| H4.3 | `service.instance.id` does not create additional Service nodes |
+| H4.4 | `deployment.environment.name` separates observations by environment |
+| H4.5 | HTTP client/server spans produce observed REST relationships |
+| H4.6 | existing OpenAPI operations are correctly reused |
+| H4.7 | messaging SEND creates/updates `SENDS` |
+| H4.8 | messaging RECEIVE/PROCESS creates/updates `RECEIVES_FROM` |
+| H4.9 | known AsyncAPI queues are reused |
+| H4.10 | unknown runtime services/queues can be created as `OBSERVED_ONLY` |
+| H4.11 | Observed Evidence includes environment, FirstSeen, LastSeen, and count |
+| H4.12 | spans are aggregated and not stored individually as Neo4j nodes |
+| H4.13 | `DECLARED ∩ OBSERVED` is recognized as `CONFIRMED` |
+| H4.14 | `OBSERVED - DECLARED` is determined deterministically |
+| H4.15 | `DECLARED - OBSERVED` is determined relative to a time window |
+| H4.16 | `DECLARED_ONLY` is not automatically classified as "obsolete" |
+| H4.17 | Telemetry Coverage is separately queryable |
+| H4.18 | O1–O5 work entirely without an LLM |
+| H4.19 | sensitive span attributes are not persisted |
+| H4.20 | the existing 300 tests remain green |
 
 ---
 
-## 66. Erfolgskriterien
+## 66. Success Criteria
 
-H4 gilt fachlich als erfolgreich, wenn mindestens ein realer Anwendungsfall gefunden wird, in dem:
+H4 is considered functionally successful if at least one real-world use case is found in which:
 
 \[
 Observed-Declared\neq\emptyset.
 \]
 
-Also beispielsweise eine reale REST- oder Queue-Abhängigkeit, die im deklarativen Knowledge Graph nicht vorhanden war.
+That is, for example, a real REST or queue dependency that was not present in the declarative knowledge graph.
 
-Ein zweites wichtiges Ergebnis wäre:
+A second important outcome would be:
 
 \[
 Declared-Observed\neq\emptyset,
 \]
 
-wobei die Plattform korrekt nur sagt:
+where the platform correctly states only:
 
-> „Nicht im ausgewählten Beobachtungszeitraum gesehen.“
+> "Not seen within the selected observation period."
 
 ---
 
-## 67. Implementierungsreihenfolge
+## 67. Implementation Order
 
 ### Iteration 11A – OTLP Foundation
 
@@ -2088,7 +2082,7 @@ OTLP Receiver
 RuntimeSpan
 ```
 
-Noch kein Graphupdate.
+No graph update yet.
 
 ### Iteration 11B – Service & Environment Resolution
 
@@ -2138,7 +2132,7 @@ firstSeen / lastSeen / count
 
 ### Iteration 11F – Architecture Comparison
 
-Implementieren:
+Implement:
 
 ```text
 O1 Observed
@@ -2162,7 +2156,7 @@ O1-O5 intents
 
 ## 68. Definition of Done
 
-Nach H4 besitzt die Plattform folgende Datenpipeline:
+After H4, the platform has the following data pipeline:
 
 ```text
                 DECLARED SOURCES
@@ -2185,7 +2179,7 @@ Nach H4 besitzt die Plattform folgende Datenpipeline:
                Runtime
 ```
 
-und kann deterministisch unterscheiden:
+and can deterministically distinguish:
 
 \[
 \boxed{
@@ -2213,9 +2207,9 @@ DECLARED-OBSERVED
 
 ---
 
-## 69. Zielzustand nach H4
+## 69. Target State After H4
 
-Vor H4:
+Before H4:
 
 \[
 \boxed{
@@ -2223,7 +2217,7 @@ Architecture\ Knowledge\ Graph
 }
 \]
 
-Nach H4:
+After H4:
 
 \[
 \boxed{
@@ -2231,22 +2225,22 @@ Architecture\ Intelligence\ Platform
 }
 \]
 
-weil die Plattform dann nicht mehr ausschließlich beantworten kann:
+because the platform can then no longer answer only:
 
-> Was behaupten unsere Architekturartefakte?
+> What do our architecture artifacts claim?
 
-sondern zusätzlich:
+but additionally:
 
-> Was passiert tatsächlich?
+> What is actually happening?
 
-und insbesondere:
+and in particular:
 
 \[
 \boxed{
-\text{Wo unterscheiden sich deklarierte und beobachtete Architektur?}
+\text{Where do declared and observed architecture differ?}
 }
 \]
 
-Genau diese Differenz ist der entscheidende zusätzliche Erkenntnisgewinn von H4.
+This exact difference is the decisive additional insight gained from H4.
 
-Ein weiterer konzeptionell wichtiger Schritt folgt daraus: Sobald `OBSERVED`-Evidence über Zeit vorliegt, besitzt die Plattform erstmals eine belastbare **zeitliche Dimension der Architektur**. Damit wäre anschließend H5 denkbar: nicht mehr nur „welche Relation wurde beobachtet?“, sondern **kausale Runtime-Flows und Architecture Trajectories**.
+A further, conceptually important step follows from this: as soon as `OBSERVED` evidence is available over time, the platform for the first time has a robust **temporal dimension of architecture**. This would subsequently make H5 conceivable: no longer just "which relation was observed?", but **causal runtime flows and architecture trajectories**.

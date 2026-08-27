@@ -4,20 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository status
 
-This repository currently contains **no source code** — only the design document
-`Architecture_Intelligence_Platform_PoC_Specification_Python.pdf`. There is no `pyproject.toml`,
-no application code, no tests, and no git history yet. Treat this as a greenfield implementation:
-the spec below is the authoritative design to implement against, not a description of existing code.
+The spec below (`docs/specifications/poc.md`) describes the original greenfield design this project
+was built from. That build is long since complete — see `docs/` (architecture, canonical model,
+graph/evidence model, ingestion, analyses, adapter development) and `ROADMAP.md` for the current
+state of the system before re-deriving a plan from the original spec.
 
-See `docs/` (architecture, canonical model, graph/evidence model, ingestion, analyses, adapter
-development) and `ROADMAP.md` for the current state of the system before re-deriving a plan from the
-PDF.
-
-Because no build system exists yet, there are no real build/lint/test commands to document. Once a
-`pyproject.toml` is created, it should follow the stack in the spec (Section 3): Python 3.13, FastAPI,
-Pydantic v2, PyYAML, `jsonschema`, the official `neo4j` Python driver, and `pytest` + `testcontainers`
-for integration tests. Update this file with the actual commands (install, lint, `pytest`, single-test
-invocation, `docker compose up`) as soon as they exist.
+Build/lint/test commands: `uv sync`, `uv run pytest tests/unit`, `uv run pytest tests/integration`,
+`uv run ruff check .`, `uv run ruff format .` — see [`docs/development.md`](docs/development.md) for
+the full local-dev workflow, including running without Docker and the Collector-based runtime demo.
 
 ## What this project is
 
@@ -204,6 +198,8 @@ exercise analyses A3/A4.
 
 ## Reference
 
-Full spec: `Architecture_Intelligence_Platform_PoC_Specification_Python.pdf` (in repo root). Consult it
-directly for exact Cypher query text (Section 13), full Pydantic reference model (Section 4.2), all 21
-acceptance criteria (Section 21), and the 9-iteration implementation plan (Section 23).
+Full spec: [`docs/specifications/poc.md`](docs/specifications/poc.md) (English translation of the
+original PDF design document). Consult it directly for exact Cypher query text (Section 13), full
+Pydantic reference model (Section 4.2), all 21 acceptance criteria (Section 21), and the 9-iteration
+implementation plan (Section 23). The rest of `docs/specifications/` holds the later H1-H5/11H design
+history in the same form.

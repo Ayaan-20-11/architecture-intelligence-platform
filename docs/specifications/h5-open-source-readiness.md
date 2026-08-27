@@ -3,17 +3,17 @@
 
 **Version:** 0.5  
 **Status:** Implementation Specification  
-**Basis:** PoC Iterations 0–11G / H1–H4 abgeschlossen + Iteration 11H Runtime Correctness & Robustness  
-**Lizenz:** Apache License 2.0 (`Apache-2.0`)  
-**Zielplattform:** GitHub  
-**Primärtechnologie:** Python 3.13, FastAPI, Pydantic, Neo4j, OpenTelemetry Collector  
-**Scope:** Vorbereitung des bestehenden Projekts für eine öffentliche Open-Source-Veröffentlichung auf GitHub
+**Basis:** PoC Iterations 0–11G / H1–H4 completed + Iteration 11H Runtime Correctness & Robustness  
+**License:** Apache License 2.0 (`Apache-2.0`)  
+**Target Platform:** GitHub  
+**Primary Technology:** Python 3.13, FastAPI, Pydantic, Neo4j, OpenTelemetry Collector  
+**Scope:** Preparing the existing project for a public open-source release on GitHub
 
 ---
 
-## 1. Ausgangslage
+## 1. Starting Point
 
-Nach Abschluss von H1–H4 und der anschließenden Iteration 11H besitzt die Architecture Intelligence Platform einen technisch belastbaren, runtime-gehärteten Kern:
+After completion of H1–H4 and the subsequent Iteration 11H, the Architecture Intelligence Platform has a technically robust, runtime-hardened core:
 
 ```text
 OpenAPI
@@ -39,7 +39,7 @@ OpenTelemetry Collector
 Instrumented Services
 ```
 
-Darauf arbeiten:
+Building on this:
 
 ```text
 deterministic analyses A1-A5
@@ -49,7 +49,7 @@ semantic Cypher validation
 constrained natural-language query layer
 ```
 
-11H verschärft dabei die Runtime-Semantik insbesondere durch:
+11H tightens the runtime semantics in particular through:
 
 ```text
 independent DECLARED / OBSERVED evidence
@@ -61,17 +61,17 @@ coverage qualification
 realistic Collector-based demo topology
 ```
 
-H5 führt **keine neue fachliche Architecture-Intelligence-Funktion** ein.
+H5 does not introduce **any new functional Architecture Intelligence capability**.
 
-Stattdessen wird der durch H1–H4 + 11H erreichte Stand so vorbereitet, dass externe Entwickler ihn verstehen, legal nutzen, sicher starten, reproduzierbar testen, erweitern und Beiträge liefern können.
+Instead, the state reached through H1–H4 + 11H is prepared so that external developers can understand it, use it legally, start it safely, test it reproducibly, extend it, and contribute to it.
 
-H5 ist damit eine Produktisierungs- und Veröffentlichungsphase.
+H5 is therefore a productization and release phase.
 
 ---
 
-## 2. Zielsetzung
+## 2. Objective
 
-Der Zielzustand lautet:
+The target state is:
 
 \[
 H1-H4
@@ -85,7 +85,7 @@ v0.1.0
 Public\ GitHub\ Repository
 \]
 
-Das Projekt soll nach H5:
+After H5, the project should be:
 
 - legally publishable,
 - secure by default,
@@ -95,56 +95,52 @@ Das Projekt soll nach H5:
 - easy to contribute to,
 - easy to extend
 
-sein.
-
-Das Release wird als `Experimental` oder `Alpha` gekennzeichnet.
+The release will be labeled as `Experimental` or `Alpha`.
 
 ---
 
-## 3. Lizenzmodell
+## 3. Licensing Model
 
-### 3.1 Projektlizenz
+### 3.1 Project License
 
-Das Projekt wird unter der:
+The project is published under the:
 
 **Apache License 2.0**
 
-veröffentlicht.
-
-SPDX-Identifier:
+SPDX identifier:
 
 ```text
 Apache-2.0
 ```
 
-Repository-Datei:
+Repository file:
 
 ```text
 LICENSE
 ```
 
-Die Datei muss den vollständigen unveränderten Standardtext der Apache License 2.0 enthalten.
+The file must contain the complete, unmodified standard text of the Apache License 2.0.
 
-### 3.2 Gründe für Apache 2.0
+### 3.2 Reasons for Apache 2.0
 
-Die Lizenz wird gewählt, weil sie:
+The license was chosen because it:
 
-- kommerzielle Nutzung erlaubt,
-- Änderungen und Weiterverteilung erlaubt,
-- private Nutzung erlaubt,
-- explizite Patentregelungen enthält,
-- in Infrastruktur-, Cloud- und Enterprise-Projekten verbreitet ist,
-- zu einem möglichen späteren Consulting- oder Enterprise-Geschäft passt.
+- allows commercial use,
+- allows modification and redistribution,
+- allows private use,
+- contains explicit patent provisions,
+- is widely used in infrastructure, cloud, and enterprise projects,
+- fits a possible future consulting or enterprise business.
 
-### 3.3 SPDX-Header
+### 3.3 SPDX Header
 
-Quelldateien können optional enthalten:
+Source files may optionally include:
 
 ```text
 SPDX-License-Identifier: Apache-2.0
 ```
 
-Optional zusätzlich:
+Optionally, in addition:
 
 ```text
 Copyright <YEAR> <PROJECT OWNER>
@@ -152,23 +148,23 @@ Copyright <YEAR> <PROJECT OWNER>
 
 ### 3.4 NOTICE
 
-Es wird geprüft, ob eine Datei:
+It will be checked whether a file:
 
 ```text
 NOTICE
 ```
 
-erforderlich oder sinnvoll ist.
+is required or useful.
 
-### 3.5 Drittanbieter-Lizenzen
+### 3.5 Third-Party Licenses
 
-Neue Datei:
+New file:
 
 ```text
 THIRD_PARTY_LICENSES.md
 ```
 
-Sie dokumentiert mindestens:
+It documents at least:
 
 ```text
 dependency
@@ -178,42 +174,42 @@ source/project URL
 notes
 ```
 
-Alle direkten Produktionsabhängigkeiten müssen vor Release geprüft werden.
+All direct production dependencies must be reviewed before release.
 
 ---
 
-## 4. Veröffentlichung nur aus bereinigtem Codebestand
+## 4. Publication Only from a Sanitized Codebase
 
-Vor Veröffentlichung muss das Repository vollständig geprüft werden auf:
+Before publication, the repository must be fully checked for:
 
-- Kundendaten,
-- interne Firmennamen,
-- reale Service-Namen,
-- Queue-Namen,
-- interne URLs,
-- Hostnamen,
-- API-Schlüssel,
-- Passwörter,
-- `.env`-Dateien,
-- Tokens,
-- Zertifikate,
-- private Schlüssel,
-- Cloud-Ressourcen-IDs,
-- interne Architekturdiagramme,
-- reale OpenAPI-/AsyncAPI-Dateien,
-- reale OpenTelemetry-Traces.
+- customer data,
+- internal company names,
+- real service names,
+- queue names,
+- internal URLs,
+- hostnames,
+- API keys,
+- passwords,
+- `.env` files,
+- tokens,
+- certificates,
+- private keys,
+- cloud resource IDs,
+- internal architecture diagrams,
+- real OpenAPI/AsyncAPI files,
+- real OpenTelemetry traces.
 
-Die Prüfung gilt ausdrücklich für die gesamte Git-Historie.
+This review explicitly applies to the entire Git history.
 
-Wenn die bestehende Historie nicht zweifelsfrei veröffentlichbar ist, wird ein neues öffentliches Repository aus einem bereinigten Export aufgebaut.
+If the existing history cannot be published beyond doubt, a new public repository will be built from a sanitized export.
 
 ---
 
 ## 5. Secret Scanning
 
-Vor dem ersten öffentlichen Push wird ein lokaler Secret Scan durchgeführt.
+Before the first public push, a local secret scan is performed.
 
-Mindestens zu prüfen:
+At minimum, check for:
 
 ```text
 OpenAI keys
@@ -227,13 +223,13 @@ certificates
 connection strings
 ```
 
-Nach Veröffentlichung wird GitHub Secret Scanning aktiviert, soweit verfügbar.
+After publication, GitHub Secret Scanning is enabled where available.
 
 ---
 
-## 6. Repository-Struktur
+## 6. Repository Structure
 
-Zielstruktur:
+Target structure:
 
 ```text
 architecture-intelligence/
@@ -278,30 +274,30 @@ architecture-intelligence/
 
 ---
 
-## 7. Projektname
+## 7. Project Name
 
-Arbeitsname:
+Working name:
 
 ```text
 architecture-intelligence
 ```
 
-Anforderungen:
+Requirements:
 
-- kurz,
-- eindeutig,
-- technisch verständlich,
-- nicht mit bestehender Marke kollidierend,
-- GitHub-Suche geeignet,
-- optional später als Python-Paket nutzbar.
+- short,
+- unambiguous,
+- technically understandable,
+- does not conflict with an existing trademark,
+- suitable for GitHub search,
+- optionally usable later as a Python package.
 
-Vor Veröffentlichung ist eine Namens- und Markenprüfung erforderlich.
+Before publication, a name and trademark check is required.
 
 ---
 
 ## 8. Repository Description
 
-Vorgeschlagen:
+Proposed:
 
 ```text
 Evidence-backed architecture intelligence from OpenAPI, AsyncAPI and OpenTelemetry.
@@ -315,17 +311,17 @@ Compare declared and observed microservice architecture using OpenAPI, AsyncAPI,
 
 ---
 
-## 9. Positionierung
+## 9. Positioning
 
-Das Projekt wird nicht primär als LLM Tool, Neo4j Tool, API Parser oder Service Catalog positioniert.
+The project is not primarily positioned as an LLM tool, Neo4j tool, API parser, or service catalog.
 
-Kernbotschaft:
+Core message:
 
 ```text
 Declared Architecture vs. Observed Architecture
 ```
 
-Kurzform:
+Short form:
 
 ```text
 Know what your architecture says.
@@ -336,14 +332,14 @@ Know what it actually does.
 
 ## 10. README
 
-Ein neuer Besucher soll innerhalb von ungefähr zwei Minuten verstehen:
+A new visitor should understand, within about two minutes:
 
-- welches Problem gelöst wird,
-- wie die Plattform funktioniert,
-- warum sie anders ist,
-- wie sie gestartet wird.
+- what problem is being solved,
+- how the platform works,
+- why it is different,
+- how to start it.
 
-Empfohlene Struktur:
+Recommended structure:
 
 ```text
 # Architecture Intelligence
@@ -374,9 +370,9 @@ declared and observed architecture diverge.
 
 ---
 
-## 11. README Feature-Liste
+## 11. README Feature List
 
-Mindestens:
+At least:
 
 ```text
 ✓ OpenAPI ingestion
@@ -397,13 +393,13 @@ Mindestens:
 ✓ telemetry coverage qualification
 ```
 
-Die README darf diese Punkte in nutzerfreundlicher Form gruppieren; die internen Begriffe `CLIENT_SERVER`, `CLIENT_ONLY` und `SERVER_ONLY` müssen nicht Teil des Hero-Abschnitts sein, sollen aber in der OpenTelemetry-Dokumentation erklärt werden.
+The README may group these points in a user-friendly form; the internal terms `CLIENT_SERVER`, `CLIENT_ONLY`, and `SERVER_ONLY` do not need to be part of the hero section, but should be explained in the OpenTelemetry documentation.
 
 ---
 
 ## 12. Quick Start
 
-Ideal:
+Ideally:
 
 ```bash
 git clone <repository>
@@ -411,20 +407,20 @@ cd architecture-intelligence
 docker compose up
 ```
 
-Danach:
+Then:
 
 ```text
 http://localhost:8000
 ```
 
-Voraussetzungen:
+Prerequisites:
 
 ```text
 Docker
 Docker Compose
 ```
 
-Optional für lokale Entwicklung:
+Optional for local development:
 
 ```text
 Python 3.13
@@ -432,11 +428,11 @@ Python 3.13
 
 ---
 
-## 13. Demo-Daten
+## 13. Demo Data
 
-Alle öffentlichen Demo-Daten müssen vollständig synthetisch sein.
+All public demo data must be fully synthetic.
 
-Beispiel:
+Example:
 
 ```text
 examples/
@@ -454,7 +450,7 @@ examples/
 
 ---
 
-## 14. Demo-Landschaft
+## 14. Demo Landscape
 
 ```text
 OrderService
@@ -473,7 +469,7 @@ OrderService
                   InvoiceService
 ```
 
-Zusätzlich H4:
+Additionally in H4:
 
 ```text
 OrderService
@@ -485,15 +481,15 @@ OrderService
 
 ## 15. Runtime Demo
 
-Die öffentliche Runtime-Demo ist nach 11H verbindlich Collector-basiert.
+Following 11H, the public runtime demo is mandatorily Collector-based.
 
-Neue Demo:
+New demo:
 
 ```text
 examples/runtime-demo/
 ```
 
-Enthält mindestens:
+Contains at least:
 
 ```text
 sample services
@@ -509,7 +505,7 @@ Start:
 docker compose -f docker-compose.demo.yml up
 ```
 
-Referenztopologie:
+Reference topology:
 
 ```text
 Demo Services
@@ -528,14 +524,14 @@ Platform                debug exporter
 Neo4j
 ```
 
-Die Demo muss klar machen:
+The demo must make clear:
 
 ```text
 AIP is an additional telemetry consumer,
 not the primary observability backend.
 ```
 
-Erwartete Zustände:
+Expected states:
 
 ```text
 CONFIRMED
@@ -543,7 +539,7 @@ OBSERVED_ONLY
 NOT_OBSERVED_IN_WINDOW
 ```
 
-Mindestens ein Szenario muss die 11H-Reconciliation-Invariante demonstrieren:
+At least one scenario must demonstrate the 11H reconciliation invariant:
 
 ```text
 initially:
@@ -553,13 +549,13 @@ remove declaration on re-import:
 OBSERVED remains = OBSERVED_ONLY
 ```
 
-Optional, aber empfohlen, ist zusätzlich ein Cross-Batch-Szenario, bei dem CLIENT- und SERVER-Span in getrennten OTLP-Requests eintreffen und dennoch zu derselben beobachteten REST-Abhängigkeit korreliert werden.
+Optionally, but recommended, an additional cross-batch scenario is included, in which CLIENT and SERVER spans arrive in separate OTLP requests and are nonetheless correlated to the same observed REST dependency.
 
 ---
 
-## 16. Dokumentation
+## 16. Documentation
 
-Zielstruktur:
+Target structure:
 
 ```text
 docs/
@@ -590,9 +586,9 @@ docs/specifications/
 
 ---
 
-## 17. Canonical Model Dokumentation
+## 17. Canonical Model Documentation
 
-Mindestens folgende Entitäten:
+At least the following entities:
 
 ```text
 Service
@@ -603,7 +599,7 @@ Schema
 Evidence
 ```
 
-und Relationen:
+and relations:
 
 ```text
 PROVIDES
@@ -619,9 +615,9 @@ DEAD_LETTERS_TO
 
 ---
 
-## 18. Graph Model Dokumentation
+## 18. Graph Model Documentation
 
-Explizit dokumentieren:
+Explicitly document:
 
 ```text
 Service -[:PROVIDES]-> Operation
@@ -632,7 +628,7 @@ Queue -[:CARRIES]-> Message
 Message -[:CONFORMS_TO]-> Schema
 ```
 
-Zusätzlich:
+Additionally:
 
 ```text
 Fact + Evidence
@@ -643,13 +639,13 @@ OBSERVED_ONLY
 NOT_OBSERVED_IN_WINDOW
 ```
 
-Nach 11H muss die öffentliche Graph-/Evidence-Dokumentation außerdem folgende Invarianten explizit machen:
+Following 11H, the public graph/evidence documentation must also make the following invariants explicit:
 
 \[
 Fact\ exists\ iff\ supporting\ Evidence\ exists
 \]
 
-und:
+and:
 
 \[
 Removing\ DECLARED\ evidence
@@ -657,7 +653,7 @@ Removing\ DECLARED\ evidence
 removing\ OBSERVED\ evidence
 \]
 
-Das bedeutet insbesondere:
+This means in particular:
 
 ```text
 DECLARED + OBSERVED
@@ -667,21 +663,21 @@ remove stale declaration
 OBSERVED_ONLY
 ```
 
-Eine Relation darf erst gelöscht werden, wenn keinerlei unterstützende Evidence mehr vorhanden ist.
+A relation may only be deleted once no supporting evidence remains at all.
 
-Für runtime-entdeckte stabile Provider-Operationen ist zu dokumentieren, dass auch:
+For runtime-discovered stable provider operations, it must also be documented that:
 
 ```text
 Service -[:PROVIDES {OBSERVED evidence}]-> ObservedOnlyOperation
 ```
 
-zulässig ist. Eine spätere OpenAPI-Deklaration muss mit derselben logischen Operation reconciliert werden können, ohne die beobachtete Evidence zu verlieren.
+is permitted. A later OpenAPI declaration must be reconcilable with the same logical operation without losing the observed evidence.
 
 ---
 
 ## 19. Adapter Extension Point
 
-Konzeptionelle Schnittstelle:
+Conceptual interface:
 
 ```python
 class ArchitectureSourceAdapter(Protocol):
@@ -691,7 +687,7 @@ class ArchitectureSourceAdapter(Protocol):
         ...
 ```
 
-Für Runtime-Quellen:
+For runtime sources:
 
 ```python
 class ObservationSourceAdapter(Protocol):
@@ -699,7 +695,7 @@ class ObservationSourceAdapter(Protocol):
         ...
 ```
 
-Neue Dokumentation:
+New documentation:
 
 ```text
 docs/adapter-development.md
@@ -707,11 +703,11 @@ docs/adapter-development.md
 
 ---
 
-## 20. Konfiguration externalisieren
+## 20. Externalize Configuration
 
-Alle installationsabhängigen Werte müssen über Konfiguration oder Environment Variables steuerbar sein.
+All installation-dependent values must be controllable via configuration or environment variables.
 
-Beispiel:
+Example:
 
 ```yaml
 architecture-intelligence:
@@ -735,21 +731,21 @@ architecture-intelligence:
     enabled: false
 ```
 
-11H-spezifische Einstellungen müssen optional sein und sichere Defaults besitzen. Fehlende neue Properties dürfen den Start einer bestehenden Konfiguration nicht verhindern.
+11H-specific settings must be optional and have safe defaults. Missing new properties must not prevent an existing configuration from starting.
 
 ---
 
-## 21. LLM bleibt optional
+## 21. LLM Remains Optional
 
-Fundamentale OSS-Anforderung:
+Fundamental OSS requirement:
 
 ```text
 Core Platform Works Without LLM
 ```
 
-Die Plattform muss ohne OpenAI, Azure OpenAI, Anthropic oder Ollama vollständig starten können.
+The platform must be able to start fully without OpenAI, Azure OpenAI, Anthropic, or Ollama.
 
-Deterministische Analysen müssen unabhängig vom LLM funktionieren.
+Deterministic analyses must function independently of the LLM.
 
 ---
 
@@ -768,15 +764,15 @@ class LLMProvider(Protocol):
         ...
 ```
 
-Der erste Release darf weiterhin nur einen Provider implementieren.
+The first release may still implement only a single provider.
 
 ---
 
 ## 23. Python Packaging
 
-`pyproject.toml` muss vollständige Projektmetadaten enthalten.
+`pyproject.toml` must contain complete project metadata.
 
-Beispiel:
+Example:
 
 ```toml
 [project]
@@ -787,7 +783,7 @@ license = {text = "Apache-2.0"}
 requires-python = ">=3.13"
 ```
 
-Zusätzlich:
+Additionally:
 
 ```text
 authors
@@ -800,25 +796,25 @@ project URLs
 
 ## 24. Docker Image
 
-Ziel:
+Target:
 
 ```text
 ghcr.io/<owner>/architecture-intelligence:<version>
 ```
 
-Anforderungen:
+Requirements:
 
 - Multi-stage build,
-- kein Root-User im Runtime-Container,
-- minimale Runtime-Abhängigkeiten,
-- reproduzierbarer Build,
-- explizite Versionierung.
+- no root user in the runtime container,
+- minimal runtime dependencies,
+- reproducible build,
+- explicit versioning.
 
 ---
 
 ## 25. Health Endpoints
 
-Mindestens:
+At least:
 
 ```text
 GET /health
@@ -830,13 +826,13 @@ Optional:
 GET /ready
 ```
 
-`/ready` prüft zusätzlich Neo4j und erforderliche Initialisierung.
+`/ready` additionally checks Neo4j and required initialization.
 
 ---
 
 ## 26. GitHub Actions – CI
 
-Neue Datei:
+New file:
 
 ```text
 .github/workflows/ci.yml
@@ -864,25 +860,25 @@ Python setup
    +--> integration tests
 ```
 
-Die CI muss die vollständige Testbaseline aus H1–H4 **und** Iteration 11H ausführen. Die H5-Spezifikation bindet sich bewusst nicht an eine feste Testanzahl; der konkrete Testbestand wird im jeweiligen Release Report dokumentiert.
+The CI must run the complete test baseline from H1–H4 **and** Iteration 11H. The H5 specification deliberately does not commit to a fixed test count; the concrete test suite is documented in the respective release report.
 
 ---
 
 ## 27. Docker Build Workflow
 
-Neue Datei:
+New file:
 
 ```text
 .github/workflows/docker.yml
 ```
 
-Bei Release oder Tag wird das Image gebaut und nach GHCR veröffentlicht.
+On release or tag, the image is built and published to GHCR.
 
 ---
 
 ## 28. Dependency Updates
 
-Dependabot konfigurieren für:
+Configure Dependabot for:
 
 ```text
 pip
@@ -894,21 +890,21 @@ docker
 
 ## 29. Dependency Security
 
-CI erhält Dependency-Security-Scanning, z. B.:
+CI receives dependency security scanning, e.g.:
 
 ```text
 pip-audit
 ```
 
-Ein Release darf keine ungeprüfte kritische Dependency-Schwachstelle enthalten.
+A release must not contain any unreviewed critical dependency vulnerability.
 
 ---
 
 ## 30. Static Security Analysis
 
-GitHub CodeQL wird aktiviert, soweit passend.
+GitHub CodeQL is enabled where applicable.
 
-Mindestens:
+At least:
 
 ```text
 Python
@@ -919,7 +915,7 @@ GitHub Actions
 
 ## 31. Container Security
 
-Docker Images werden automatisiert auf bekannte Schwachstellen geprüft, z. B. mit:
+Docker images are automatically scanned for known vulnerabilities, e.g. with:
 
 ```text
 Trivy
@@ -929,19 +925,19 @@ Trivy
 
 ## 32. SECURITY.md
 
-Muss enthalten:
+Must contain:
 
-- unterstützte Releases,
-- Meldeweg für Schwachstellen,
-- keine Security Reports als öffentliche Issues,
-- Kontaktweg,
-- Disclosure-Prozess.
+- supported releases,
+- reporting path for vulnerabilities,
+- no security reports as public issues,
+- contact channel,
+- disclosure process.
 
 ---
 
 ## 33. Security Model
 
-Neue Datei:
+New file:
 
 ```text
 docs/security-model.md
@@ -959,13 +955,13 @@ bounded HTTP correlation buffer
 filesystem imports
 ```
 
-Fundamentale Regel:
+Fundamental rule:
 
 ```text
 LLM Output = Untrusted Input
 ```
 
-Für den 11H-Correlation Buffer muss dokumentiert werden:
+For the 11H correlation buffer, the following must be documented:
 
 ```text
 bounded
@@ -975,13 +971,13 @@ no Neo4j Span nodes
 allowlisted architecture metadata only
 ```
 
-Die Dokumentation muss klar unterscheiden zwischen kurzlebiger Korrelationslogik und persistierter Architecture Evidence.
+The documentation must clearly distinguish between short-lived correlation logic and persisted architecture evidence.
 
 ---
 
 ## 34. OpenTelemetry Privacy Model
 
-Dokumentieren:
+Document:
 
 ```text
 attribute allowlist
@@ -995,9 +991,9 @@ no full URLs
 no raw trace storage in Neo4j
 ```
 
-Diese Regeln gelten ebenfalls für den 11H-Correlation Buffer. Der Buffer darf kein alternativer Rohdaten- oder Trace-Speicher werden.
+These rules also apply to the 11H correlation buffer. The buffer must not become an alternative store for raw data or traces.
 
-Zusätzlich sind die Runtime-Evidence-Semantiken zu dokumentieren:
+Additionally, the runtime evidence semantics must be documented:
 
 ```text
 CLIENT_SERVER  strongest correlated HTTP observation
@@ -1006,21 +1002,21 @@ SERVER_ONLY    only when caller identity is reliable
 UNRESOLVED     insufficient identity; do not guess
 ```
 
-Weiterhin muss öffentlich festgehalten werden:
+Furthermore, it must be publicly stated that:
 
 \[
 ObservationCount \neq ExactRequestCount
 \]
 
-`observation_count` ist ein Architektur-Evidence-Indikator und keine abrechnungs- oder SLO-taugliche Verkehrszählung.
+`observation_count` is an architecture evidence indicator, not a billing- or SLO-grade traffic count.
 
-Für negative Findings gilt:
+For negative findings, the following applies:
 
 ```text
 NOT_OBSERVED_IN_WINDOW
 ```
 
-kann durch qualitative Telemetry Coverage ergänzt werden, etwa:
+can be supplemented by qualitative telemetry coverage, such as:
 
 ```text
 SUFFICIENT
@@ -1029,13 +1025,13 @@ NONE
 UNKNOWN
 ```
 
-Es darf daraus nicht automatisch `obsolete`, `unused` oder `dead` abgeleitet werden.
+It must not be automatically inferred from this that something is `obsolete`, `unused`, or `dead`.
 
 ---
 
 ## 35. CONTRIBUTING.md
 
-Muss enthalten:
+Must contain:
 
 ```text
 development setup
@@ -1052,7 +1048,7 @@ adapter contribution guide
 
 ## 36. Pull Request Requirements
 
-Ein PR muss mindestens erfüllen:
+A PR must at least satisfy:
 
 ```text
 tests green
@@ -1062,7 +1058,7 @@ no secrets
 documentation updated when applicable
 ```
 
-Für neue Adapter zusätzlich:
+Additionally, for new adapters:
 
 ```text
 unit tests
@@ -1074,7 +1070,7 @@ adapter documentation
 
 ## 37. Community Files
 
-Mindestens:
+At least:
 
 ```text
 CONTRIBUTING.md
@@ -1083,7 +1079,7 @@ CODE_OF_CONDUCT.md
 SUPPORT.md
 ```
 
-GitHub Discussions werden für Q&A, Ideen, Show-and-Tell und Adapter-Vorschläge aktiviert.
+GitHub Discussions is enabled for Q&A, ideas, show-and-tell, and adapter proposals.
 
 ---
 
@@ -1101,13 +1097,13 @@ GitHub Discussions werden für Q&A, Ideen, Show-and-Tell und Adapter-Vorschläge
 
 ## 39. Pull Request Template
 
-Neue Datei:
+New file:
 
 ```text
 .github/pull_request_template.md
 ```
 
-Checkboxen:
+Checkboxes:
 
 ```text
 [ ] tests added/updated
@@ -1121,7 +1117,7 @@ Checkboxen:
 
 ## 40. Good First Issues
 
-Vor Launch mindestens fünf kleine, klar beschriebene Aufgaben vorbereiten.
+Before launch, prepare at least five small, clearly described tasks.
 
 Labels:
 
@@ -1136,7 +1132,7 @@ adapter
 
 ## 41. Repository Topics
 
-Empfohlen:
+Recommended:
 
 ```text
 architecture
@@ -1157,7 +1153,7 @@ dependency-analysis
 
 ## 42. Social Preview
 
-GitHub Social Preview erstellen, z. B.:
+Create a GitHub social preview, e.g.:
 
 ```text
 DECLARED                      OBSERVED
@@ -1171,23 +1167,23 @@ Manifest
 
 ---
 
-## 43. Versionierung
+## 43. Versioning
 
 Semantic Versioning.
 
-Erster öffentlicher Release:
+First public release:
 
 ```text
 v0.1.0
 ```
 
-Alternativ:
+Alternatively:
 
 ```text
 v0.1.0-alpha.1
 ```
 
-Noch nicht garantiert stabil:
+Not yet guaranteed stable:
 
 ```text
 Canonical Model
@@ -1201,13 +1197,13 @@ Configuration format
 
 ## 44. CHANGELOG
 
-Neue Datei:
+New file:
 
 ```text
 CHANGELOG.md
 ```
 
-Struktur:
+Structure:
 
 ```text
 Added
@@ -1222,7 +1218,7 @@ Removed
 
 ## 45. ROADMAP.md
 
-Mindestens:
+At least:
 
 ```text
 v0.1
@@ -1251,13 +1247,13 @@ Future
 
 ## 46. Architecture Decision Records
 
-Neue Struktur:
+New structure:
 
 ```text
 docs/adr/
 ```
 
-Empfohlene ADRs:
+Recommended ADRs:
 
 ```text
 0001-use-neo4j.md
@@ -1272,7 +1268,7 @@ Empfohlene ADRs:
 
 ---
 
-## 47. OSS Architekturprinzipien
+## 47. OSS Architecture Principles
 
 1. Canonical model before backend-specific persistence.
 2. Evidence before assertion.
@@ -1285,9 +1281,9 @@ Empfohlene ADRs:
 
 ## 48. Demo Screenshot / GIF
 
-Vor Release mindestens ein visuelles Demo-Artefakt erzeugen.
+Before release, produce at least one visual demo artifact.
 
-Beispiel:
+Example:
 
 ```text
 OrderService
@@ -1307,9 +1303,9 @@ Architecture Drift
 
 ---
 
-## 49. Veröffentlichungssicherheit
+## 49. Publication Safety
 
-Vor Public Release prüfen:
+Check before public release:
 
 ```text
 README links
@@ -1331,7 +1327,7 @@ Collector-based runtime demo verified
 
 ## 50. Release Gate
 
-Release wird blockiert bei:
+Release is blocked in case of:
 
 ```text
 known secret in history
@@ -1346,7 +1342,7 @@ broken cross-batch runtime correlation
 runtime demo without working Collector -> AIP path
 ```
 
-Vor Release müssen insbesondere folgende 11H-Szenarien grün sein:
+Before release, in particular the following 11H scenarios must be green:
 
 ```text
 DECLARED + OBSERVED
@@ -1355,7 +1351,7 @@ DECLARED + OBSERVED
 → OBSERVED_ONLY
 ```
 
-und:
+and:
 
 ```text
 CLIENT span in OTLP request A
@@ -1365,48 +1361,48 @@ SERVER span in OTLP request B
 
 ---
 
-## 51. H5 Akzeptanzkriterien
+## 51. H5 Acceptance Criteria
 
-| ID | Kriterium |
+| ID | Criterion |
 |---|---|
-| H5.1 | Projektlizenz ist Apache License 2.0 |
-| H5.2 | `LICENSE` enthält den vollständigen Apache-2.0-Standardtext |
-| H5.3 | Drittanbieter-Lizenzen sind geprüft und dokumentiert |
-| H5.4 | Aktueller Codebestand enthält keine Secrets oder Kundendaten |
-| H5.5 | Git-Historie ist geprüft oder bewusst neu aufgebaut |
-| H5.6 | README erklärt Problem, Nutzen und Architektur |
-| H5.7 | `docker compose up` liefert einen funktionierenden Basis-Quick-Start |
-| H5.8 | Öffentliche Demo-Daten sind vollständig synthetisch |
-| H5.9 | Die öffentliche Runtime-Demo verwendet einen OpenTelemetry Collector und ist reproduzierbar |
-| H5.10 | Die Runtime-Demo demonstriert `CONFIRMED`, `OBSERVED_ONLY` und `NOT_OBSERVED_IN_WINDOW` |
-| H5.11 | Die Runtime-Demo oder ein Integrationstest demonstriert `DECLARED + OBSERVED -> remove declaration -> OBSERVED_ONLY` ohne Evidence-Verlust |
-| H5.12 | Canonical Model ist öffentlich dokumentiert |
-| H5.13 | Graphmodell und Evidence-Modell einschließlich der 11H-Reconciliation-Invariante sind dokumentiert |
-| H5.14 | `OBSERVED PROVIDES` für runtime-entdeckte stabile Provider-Operationen ist dokumentiert |
-| H5.15 | OpenTelemetry-Dokumentation erklärt `CLIENT_SERVER`, `CLIENT_ONLY`, `SERVER_ONLY` und `UNRESOLVED` |
-| H5.16 | OpenTelemetry-Dokumentation erklärt, dass Cross-Batch-Korrelation unterstützt wird |
-| H5.17 | `NOT_OBSERVED_IN_WINDOW` und qualitative Telemetry Coverage werden korrekt dokumentiert |
-| H5.18 | `observation_count` wird ausdrücklich nicht als exakte Request-Anzahl dargestellt |
-| H5.19 | Adapter-Erweiterungspunkt ist dokumentiert |
-| H5.20 | Plattform funktioniert ohne LLM-Konfiguration |
-| H5.21 | GitHub Actions führen Lint, Unit- und Integrationstests für die vollständige H1–H4+11H-Baseline aus |
-| H5.22 | Docker Image wird reproduzierbar gebaut |
-| H5.23 | Dependency- und Security-Scanning sind aktiviert |
-| H5.24 | `SECURITY.md` ist vorhanden |
-| H5.25 | Security Model dokumentiert den bounded Correlation Buffer als Trust Boundary |
-| H5.26 | OpenTelemetry Privacy Model gilt auch für temporäre Korrelationsdaten |
-| H5.27 | `CONTRIBUTING.md` ist vorhanden |
-| H5.28 | `CODE_OF_CONDUCT.md` ist vorhanden |
-| H5.29 | Issue- und PR-Templates sind vorhanden |
-| H5.30 | ROADMAP und CHANGELOG sind vorhanden |
-| H5.31 | GitHub Repository Topics und Social Preview sind gesetzt |
-| H5.32 | mindestens fünf `good first issue`-Tickets sind vorbereitet |
-| H5.33 | `docs/specifications/` enthält H4, 11H und H5 als nachvollziehbare Designhistorie |
-| H5.34 | erster öffentlicher Release kann als `v0.1.0` oder `v0.1.0-alpha.1` erstellt werden |
+| H5.1 | Project license is Apache License 2.0 |
+| H5.2 | `LICENSE` contains the complete Apache-2.0 standard text |
+| H5.3 | Third-party licenses are reviewed and documented |
+| H5.4 | The current codebase contains no secrets or customer data |
+| H5.5 | Git history is reviewed or deliberately rebuilt |
+| H5.6 | README explains the problem, benefit, and architecture |
+| H5.7 | `docker compose up` provides a working basic quick start |
+| H5.8 | Public demo data is fully synthetic |
+| H5.9 | The public runtime demo uses an OpenTelemetry Collector and is reproducible |
+| H5.10 | The runtime demo demonstrates `CONFIRMED`, `OBSERVED_ONLY`, and `NOT_OBSERVED_IN_WINDOW` |
+| H5.11 | The runtime demo or an integration test demonstrates `DECLARED + OBSERVED -> remove declaration -> OBSERVED_ONLY` without loss of evidence |
+| H5.12 | Canonical Model is publicly documented |
+| H5.13 | Graph model and Evidence model, including the 11H reconciliation invariant, are documented |
+| H5.14 | `OBSERVED PROVIDES` for runtime-discovered stable provider operations is documented |
+| H5.15 | OpenTelemetry documentation explains `CLIENT_SERVER`, `CLIENT_ONLY`, `SERVER_ONLY`, and `UNRESOLVED` |
+| H5.16 | OpenTelemetry documentation explains that cross-batch correlation is supported |
+| H5.17 | `NOT_OBSERVED_IN_WINDOW` and qualitative telemetry coverage are correctly documented |
+| H5.18 | `observation_count` is explicitly not presented as an exact request count |
+| H5.19 | Adapter extension point is documented |
+| H5.20 | Platform functions without LLM configuration |
+| H5.21 | GitHub Actions run lint, unit, and integration tests for the complete H1–H4+11H baseline |
+| H5.22 | Docker image is built reproducibly |
+| H5.23 | Dependency and security scanning are enabled |
+| H5.24 | `SECURITY.md` is present |
+| H5.25 | Security Model documents the bounded correlation buffer as a trust boundary |
+| H5.26 | OpenTelemetry Privacy Model also applies to temporary correlation data |
+| H5.27 | `CONTRIBUTING.md` is present |
+| H5.28 | `CODE_OF_CONDUCT.md` is present |
+| H5.29 | Issue and PR templates are present |
+| H5.30 | ROADMAP and CHANGELOG are present |
+| H5.31 | GitHub repository topics and social preview are set |
+| H5.32 | at least five `good first issue` tickets are prepared |
+| H5.33 | `docs/specifications/` contains H4, 11H, and H5 as a traceable design history |
+| H5.34 | the first public release can be created as `v0.1.0` or `v0.1.0-alpha.1` |
 
 ---
 
-## 52. Empfohlene Implementierungsreihenfolge
+## 52. Recommended Implementation Order
 
 ### Iteration 12A – Legal & Repository Sanitization
 
@@ -1509,7 +1505,7 @@ public announcement
 
 ## 53. Definition of Done
 
-H5 ist abgeschlossen, wenn ein bisher unbeteiligter Entwickler:
+H5 is complete when a previously uninvolved developer can:
 
 ```text
 discover
@@ -1527,9 +1523,9 @@ modify
 contribute
 ```
 
-kann, ohne internes Wissen über das ursprüngliche Projekt zu benötigen.
+without needing any internal knowledge of the original project.
 
-Der zentrale Einstieg:
+The central entry point:
 
 ```bash
 git clone <public repository>
@@ -1537,25 +1533,25 @@ cd architecture-intelligence
 docker compose up
 ```
 
-muss reproduzierbar funktionieren.
+must work reproducibly.
 
 ---
 
-## 54. Zielzustand nach H5
+## 54. Target State After H5
 
-Vor H5:
+Before H5:
 
 ```text
 Working Architecture Intelligence Project
 ```
 
-Nach H5:
+After H5:
 
 ```text
 Open Source Architecture Intelligence Project
 ```
 
-mit:
+with:
 
 ```text
 Apache-2.0
@@ -1571,9 +1567,9 @@ versioned releases
 
 ---
 
-## 55. Nicht-Ziele von H5
+## 55. Non-Goals of H5
 
-H5 implementiert ausdrücklich nicht:
+H5 explicitly does not implement:
 
 ```text
 new architecture analyses
@@ -1590,11 +1586,11 @@ managed cloud hosting
 
 ---
 
-## 56. Strategische Bedeutung
+## 56. Strategic Significance
 
-Open Source wird nicht nur als Code-Veröffentlichung verstanden.
+Open source is not understood merely as a code release.
 
-Das eigentliche Ziel lautet:
+The actual goal is:
 
 ```text
 Code
@@ -1612,7 +1608,7 @@ Community Entry Point
 
 ---
 
-## 57. Lizenzangabe für README und Repository
+## 57. License Statement for README and Repository
 
 README Footer:
 
@@ -1633,25 +1629,25 @@ Apache-2.0
 
 ## 58. Release Recommendation
 
-Empfohlene erste Veröffentlichung:
+Recommended first release:
 
 ```text
 v0.1.0
 ```
 
-mit:
+with:
 
 ```text
 Project Status: Experimental
 License: Apache-2.0
 ```
 
-Alternativ für frühes Community-Feedback:
+Alternatively, for early community feedback:
 
 ```text
 v0.1.0-alpha.1
 ```
 
-Die Veröffentlichung soll nicht auf spätere Funktionen wie GraphRAG oder Architecture Wiki warten.
+The release should not wait for later features such as GraphRAG or Architecture Wiki.
 
-H1–H4 bilden zusammen mit Iteration 11H einen ausreichend eigenständigen, runtime-gehärteten technischen und fachlichen Kern für ein öffentliches Open-Source-Projekt.
+H1–H4, together with Iteration 11H, form a sufficiently self-contained, runtime-hardened technical and functional core for a public open-source project.

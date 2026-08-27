@@ -4,14 +4,14 @@
 **Version:** 0.2  
 **Status:** Implementation Specification  
 **Basis:** PoC Iterations 0–9  
-**Technologie:** Python 3.13, FastAPI, Pydantic, Neo4j  
-**Scope:** Weiterentwicklung des bestehenden PoC ohne Vector DB, Wiki, GraphRAG oder OpenTelemetry
+**Technology:** Python 3.13, FastAPI, Pydantic, Neo4j  
+**Scope:** Further development of the existing PoC without Vector DB, Wiki, GraphRAG, or OpenTelemetry
 
 ---
 
-## 1. Ausgangslage
+## 1. Starting Point
 
-Der bestehende PoC hat die Kernhypothese bestätigt:
+The existing PoC has confirmed the core hypothesis:
 
 ```text
 OpenAPI + AsyncAPI + ArchitectureManifest
@@ -20,13 +20,13 @@ OpenAPI + AsyncAPI + ArchitectureManifest
 → ArchitectureAnalysis
 ```
 
-Die Implementierung verfügt derzeit über 143 Unit Tests und 55 Neo4j/Testcontainers-Integrationstests; insgesamt laufen 198 Tests erfolgreich.
+The implementation currently has 143 unit tests and 55 Neo4j/Testcontainers integration tests; a total of 198 tests pass successfully.
 
-Von AC1–AC15 sind 14 Kriterien vollständig erfüllt. AC13 ist teilweise erfüllt: Provenance wird in den Adaptern erzeugt, jedoch nicht als abfragbare Evidenz im Neo4j Knowledge Graph persistiert.
+Of AC1–AC15, 14 criteria are fully met. AC13 is partially met: provenance is generated in the adapters, but it is not persisted as queryable evidence in the Neo4j knowledge graph.
 
-Außerdem zeigte ein Live-Test eine zweite wichtige Grenze: Das LLM erzeugte syntaktisch gültiges und sicheres Cypher, interpretierte jedoch die Richtung der Relation `SENDS` semantisch falsch. Der vorhandene Security Validator konnte dies erwartungsgemäß nicht erkennen.
+In addition, a live test revealed a second important limitation: the LLM generated syntactically valid and safe Cypher, but semantically misinterpreted the direction of the `SENDS` relation. As expected, the existing security validator could not detect this.
 
-Diese Iteration adressiert deshalb drei Anforderungen:
+This iteration therefore addresses three requirements:
 
 \[
 \boxed{
@@ -39,11 +39,11 @@ H3 &: \text{Deterministic Intent Routing}
 
 ---
 
-## 2. Ziele der Iteration
+## 2. Goals of the Iteration
 
-Die nächste Iteration soll den bestehenden Architecture Knowledge Graph **härten**, bevor weitere AI-Komponenten eingeführt werden.
+The next iteration is intended to **harden** the existing Architecture Knowledge Graph before further AI components are introduced.
 
-Die Zielpipeline lautet:
+The target pipeline is:
 
 ```text
                        Architecture Sources
@@ -82,27 +82,27 @@ Die Zielpipeline lautet:
                                                          Neo4j
 ```
 
-Die drei Kernziele sind:
+The three core goals are:
 
 ### G1 – Evidence
 
-Jede relevante Architekturbehauptung muss nachvollziehbar beantworten können:
+Every relevant architecture claim must be able to traceably answer:
 
-> Woher weiß die Plattform das?
+> Where does the platform know this from?
 
 ### G2 – Semantic Query Safety
 
-Nicht nur gefährliches Cypher, sondern auch strukturell falsches Cypher soll erkannt werden.
+Not only dangerous Cypher, but also structurally incorrect Cypher should be detected.
 
 ### G3 – Determinism before AI
 
-Fragen, die einer bekannten Architekturabfrage entsprechen, dürfen nicht unnötig über generiertes Cypher beantwortet werden.
+Questions that correspond to a known architecture query must not be unnecessarily answered via generated Cypher.
 
 ---
 
-## 3. Nicht im Scope
+## 3. Out of Scope
 
-Folgende Funktionen werden ausdrücklich **nicht** implementiert:
+The following features are explicitly **not** implemented:
 
 - OpenTelemetry
 - `OBSERVED` Runtime Facts
@@ -110,14 +110,14 @@ Folgende Funktionen werden ausdrücklich **nicht** implementiert:
 - GraphRAG
 - Wiki
 - ADR-RAG
-- Source-Code-RAG
-- autonome Agents
-- generische Ontologie
+- Source Code RAG
+- autonomous agents
+- generic ontology
 - OWL / RDF / SHACL
-- weitere Analysen A6+
-- automatische REST-Caller-Erkennung
+- additional analyses A6+
+- automatic REST caller detection
 
-Damit bleibt der Scope:
+This keeps the scope at:
 
 \[
 \boxed{
@@ -133,11 +133,11 @@ Controlled\ NL\ Interface
 
 ---
 
-# 4. Teilprojekt H1 – Provenance / Evidence
+# 4. Subproject H1 – Provenance / Evidence
 
 ## 4.1 Problem
 
-Der bestehende Canonical Layer erzeugt bereits:
+The existing canonical layer already generates:
 
 ```text
 source_type
@@ -146,15 +146,15 @@ source_revision
 evidence_type
 ```
 
-Diese Provenance-Daten werden derzeit jedoch nicht in einer Form gespeichert, mit der eine Graphabfrage feststellen kann, aus welcher konkreten Spezifikation eine Architekturbeziehung stammt. Der Importer speichert lediglich `sources[]` für Reimport-Zwecke.
+However, this provenance data is currently not stored in a form that allows a graph query to determine which specific specification an architecture relationship originates from. The importer only stores `sources[]` for reimport purposes.
 
-Das ist für einen Architecture Knowledge Graph nicht ausreichend.
+That is not sufficient for an Architecture Knowledge Graph.
 
 ---
 
-## 4.2 Architekturprinzip
+## 4.2 Architectural Principle
 
-Ein Architektur-Fakt wird zukünftig als Kombination aus
+Going forward, an architecture fact is understood as a combination of
 
 \[
 \boxed{
@@ -162,9 +162,9 @@ Fact + Evidence
 }
 \]
 
-verstanden.
+.
 
-Beispiel:
+Example:
 
 \[
 OrderService
@@ -172,9 +172,9 @@ OrderService
 paymentQueue
 \]
 
-ist der Fakt.
+is the fact.
 
-Die Evidence ist:
+The evidence is:
 
 ```text
 sourceType       ASYNCAPI
@@ -185,7 +185,7 @@ evidenceType     DECLARED
 
 ---
 
-## 4.3 Evidence-Modell
+## 4.3 Evidence Model
 
 Canonical Model:
 
@@ -212,9 +212,9 @@ class Evidence(BaseModel):
     evidence_type: EvidenceType = EvidenceType.DECLARED
 ```
 
-Eine Evidence besitzt eine stabile ID.
+An Evidence has a stable ID.
 
-Beispielsweise:
+For example:
 
 ```text
 evidence:asyncapi:order-service:abc123
@@ -222,15 +222,15 @@ evidence:asyncapi:order-service:abc123
 
 ---
 
-## 4.4 Graph-Modell
+## 4.4 Graph Model
 
-Es wird ein neuer Knotentyp eingeführt:
+A new node type is introduced:
 
 ```text
 (:Evidence)
 ```
 
-mit:
+with:
 
 ```text
 id
@@ -240,7 +240,7 @@ sourceRevision
 evidenceType
 ```
 
-Beispiel:
+Example:
 
 ```text
 (:Evidence {
@@ -254,23 +254,23 @@ Beispiel:
 
 ---
 
-## 4.5 Evidence für Beziehungen
+## 4.5 Evidence for Relationships
 
-Die wichtigste Provenance betrifft nicht primär Nodes, sondern Aussagen.
+The most important provenance concerns not primarily nodes, but statements.
 
-Beispiel:
+Example:
 
 ```text
 OrderService -[:SENDS]-> payment-q
 ```
 
-Diese Relation soll mindestens folgende Properties erhalten:
+This relation should receive at least the following property:
 
 ```text
 evidenceIds
 ```
 
-Beispiel:
+Example:
 
 ```text
 OrderService
@@ -283,28 +283,28 @@ OrderService
 payment-q
 ```
 
-Dadurch können mehrere Quellen denselben Fakt bestätigen.
+This allows multiple sources to confirm the same fact.
 
 ---
 
-## 4.6 Warum Evidence nicht ausschließlich als Relationship-Properties?
+## 4.6 Why Not Model Evidence Exclusively as Relationship Properties?
 
-Langfristig müssen Fragen möglich sein wie:
+In the long run, questions like the following must be possible:
 
-> Zeige alle Fakten aus einer bestimmten AsyncAPI-Version.
+> Show all facts from a specific AsyncAPI version.
 
-oder:
+or:
 
-> Welche Architekturinformationen stammen aus Manifesten?
+> Which architecture information originates from manifests?
 
-Ein eigener `Evidence`-Node erlaubt:
+A dedicated `Evidence` node allows:
 
 ```cypher
 MATCH (e:Evidence {sourceType:'ASYNCAPI'})
 RETURN e
 ```
 
-und ermöglicht spätere Erweiterungen um:
+and enables future extensions with:
 
 ```text
 OpenTelemetry
@@ -314,7 +314,7 @@ Kubernetes
 Manual Assertion
 ```
 
-Deshalb:
+Therefore:
 
 \[
 Evidence = FirstClassEntity.
@@ -322,15 +322,15 @@ Evidence = FirstClassEntity.
 
 ---
 
-## 4.7 Optionales zukünftiges Statement-Modell
+## 4.7 Optional Future Statement Model
 
-Für diese Iteration **nicht zwingend erforderlich**, aber das Modell soll kompatibel damit bleiben:
+Not strictly required for this iteration, but the model should remain compatible with it:
 
 ```text
 (:ArchitectureFact)
 ```
 
-etwa:
+for example:
 
 ```text
 Fact
@@ -339,19 +339,19 @@ Fact
   object    = payment-q
 ```
 
-mit:
+with:
 
 ```text
 Fact -[:SUPPORTED_BY]-> Evidence
 ```
 
-Der aktuelle PoC darf zunächst bei Relationships + `evidenceIds` bleiben.
+The current PoC may, for now, remain at relationships + `evidenceIds`.
 
 ---
 
-## 4.8 Importverhalten
+## 4.8 Import Behavior
 
-Beim Import:
+During import:
 
 ```text
 Adapter
@@ -365,32 +365,32 @@ Evidence
 Graph Importer
 ```
 
-Der GraphImporter muss:
+The GraphImporter must:
 
-1. `Evidence` mit `MERGE` persistieren.
-2. die Architekturrelation mit `MERGE` erzeugen,
-3. Evidence-IDs dedupliziert hinzufügen,
-4. beim Reimport veraltete Evidence entfernen.
+1. persist `Evidence` with `MERGE`.
+2. create the architecture relation with `MERGE`,
+3. add evidence IDs deduplicated,
+4. remove stale evidence on reimport.
 
 ---
 
 ## 4.9 Reconciliation
 
-Wenn Revision
+When revision
 
 ```text
 abc123
 ```
 
-durch
+is replaced by
 
 ```text
 def456
 ```
 
-ersetzt wird, darf eine obsolete Evidence nicht dauerhaft einen nicht mehr vorhandenen Fakt legitimieren.
+an obsolete evidence must not permanently legitimize a fact that no longer exists.
 
-Deshalb:
+Therefore:
 
 ```text
 import source
@@ -405,7 +405,7 @@ remove stale evidence references
 remove unsupported facts
 ```
 
-Regel:
+Rule:
 
 \[
 EvidenceSet(F)=\emptyset
@@ -413,13 +413,13 @@ EvidenceSet(F)=\emptyset
 delete(F)
 \]
 
-sofern der Fakt nicht anderweitig administrativ erzeugt wurde.
+provided the fact was not otherwise created administratively.
 
 ---
 
 ## 4.10 Evidence API
 
-Neue REST-Endpunkte:
+New REST endpoints:
 
 ```text
 GET /api/evidence
@@ -429,7 +429,7 @@ GET /api/evidence
 GET /api/evidence/{evidenceId}
 ```
 
-zusätzlich:
+additionally:
 
 ```text
 GET /api/services/{serviceId}/evidence
@@ -439,19 +439,19 @@ GET /api/services/{serviceId}/evidence
 GET /api/queues/{queueId}/evidence
 ```
 
-Optional wichtiger:
+Optionally more important:
 
 ```text
 GET /api/relations/{relationId}/evidence
 ```
 
-falls Relations später eigene IDs erhalten.
+should relations later receive their own IDs.
 
 ---
 
 ## 4.11 Service Explorer
 
-Die UI soll beispielsweise anzeigen:
+The UI should, for example, display:
 
 ```text
 OrderService
@@ -467,7 +467,7 @@ payment-q
         DECLARED
 ```
 
-Damit ist erstmals sichtbar:
+This makes visible for the first time:
 
 \[
 Architecture\ Claim
@@ -477,78 +477,76 @@ Source.
 
 ---
 
-## 4.12 Akzeptanzkriterien H1
+## 4.12 Acceptance Criteria H1
 
 **AC-H1-1**  
-Alle Adapter erzeugen Evidence.
+All adapters generate evidence.
 
 **AC-H1-2**  
-Evidence wird als `Evidence` Node in Neo4j persistiert.
+Evidence is persisted as an `Evidence` node in Neo4j.
 
 **AC-H1-3**  
-Wesentliche Architekturrelations besitzen mindestens eine Evidence-Referenz.
+Essential architecture relations possess at least one evidence reference.
 
 **AC-H1-4**  
-Mehrfachimporte erzeugen keine duplizierte Evidence.
+Multiple imports do not create duplicated evidence.
 
 **AC-H1-5**  
-Eine veraltete Revision wird korrekt reconciled.
+An outdated revision is correctly reconciled.
 
 **AC-H1-6**  
-Eine API-Abfrage kann für einen Fakt Quelle und Revision ermitteln.
+An API query can determine the source and revision for a fact.
 
 **AC-H1-7**  
-AC13 des ursprünglichen PoC gilt danach als vollständig erfüllt.
+AC13 of the original PoC is then considered fully met.
 
 ---
 
-# 5. Teilprojekt H2 – Semantic Query Validator
+# 5. Subproject H2 – Semantic Query Validator
 
-## 5.1 Problemstellung
+## 5.1 Problem Statement
 
-Der aktuelle CypherValidator beantwortet:
+The current CypherValidator answers:
 
 \[
 IsReadOnly(q)?
 \]
 
-nicht aber:
+but not:
 
 \[
 IsSemanticallyValid(q,GSchema)?
 \]
 
-Im Live-Test war beispielsweise:
+In the live test, for example:
 
 ```text
 Queue -[:SENDS]-> Service
 ```
 
-zulässig, obwohl das tatsächliche Modell nur
+was permitted, even though the actual model only defines
 
 ```text
 Service -[:SENDS]-> Queue
 ```
 
-definiert.
-
 ---
 
-## 5.2 Ziel
+## 5.2 Goal
 
-Ein neuer Semantic Validator soll prüfen:
+A new Semantic Validator should check:
 
 \[
 domain(Relation)
 \]
 
-und
+and
 
 \[
 range(Relation).
 \]
 
-Beispielsweise:
+For example:
 
 \[
 domain(SENDS)=Service
@@ -558,25 +556,25 @@ domain(SENDS)=Service
 range(SENDS)=Queue.
 \]
 
-Damit ist
+This makes
 
 \[
 Service\xrightarrow{SENDS}Queue
 \]
 
-gültig und
+valid and
 
 \[
 Queue\xrightarrow{SENDS}Service
 \]
 
-ungültig.
+invalid.
 
 ---
 
 ## 5.3 Graph Schema Registry
 
-Neue Komponente:
+New component:
 
 ```text
 app/
@@ -656,9 +654,9 @@ RELATIONS = {
 
 ---
 
-## 5.4 Validierungspipeline
+## 5.4 Validation Pipeline
 
-Neue Pipeline:
+New pipeline:
 
 ```text
 Generated Cypher
@@ -673,35 +671,35 @@ Semantic Validator
 Neo4j
 ```
 
-Der bestehende Validator bleibt bestehen.
+The existing validator remains in place.
 
-Der neue Validator ersetzt ihn **nicht**.
+The new validator does **not** replace it.
 
 ---
 
-## 5.5 Prüfung
+## 5.5 Checking
 
-Beispiel gültig:
+Valid example:
 
 ```cypher
 MATCH (s:Service)-[:SENDS]->(q:Queue)
 RETURN s, q
 ```
 
-Ergebnis:
+Result:
 
 ```text
 VALID
 ```
 
-Beispiel ungültig:
+Invalid example:
 
 ```cypher
 MATCH (q:Queue)-[:SENDS]->(s:Service)
 RETURN q
 ```
 
-Ergebnis:
+Result:
 
 ```text
 SemanticValidationError:
@@ -717,9 +715,9 @@ Queue -> Service
 
 ---
 
-## 5.6 Weitere semantische Prüfungen
+## 5.6 Additional Semantic Checks
 
-Im Scope:
+In scope:
 
 ### Relation exists
 
@@ -727,7 +725,7 @@ Im Scope:
 FOO_BAR
 ```
 
-muss abgelehnt werden.
+must be rejected.
 
 ### Source type valid
 
@@ -735,7 +733,7 @@ muss abgelehnt werden.
 Queue -[:PROVIDES]-> Operation
 ```
 
-ungültig.
+invalid.
 
 ### Target type valid
 
@@ -743,7 +741,7 @@ ungültig.
 Service -[:SENDS]-> Message
 ```
 
-ungültig.
+invalid.
 
 ### Direction valid
 
@@ -751,28 +749,28 @@ ungültig.
 Queue -[:SENDS]-> Service
 ```
 
-ungültig.
+invalid.
 
 ---
 
-## 5.7 Noch nicht im Scope
+## 5.7 Not Yet in Scope
 
-Nicht geprüft werden:
+Not checked:
 
-- fachliche Bedeutung einer Frage,
-- komplexe Cypher-Äquivalenz,
-- Korrektheit von `WHERE`-Logik,
-- Aggregationssemantik,
-- Optimierung,
-- Vollständigkeit einer Antwort.
+- the domain meaning of a question,
+- complex Cypher equivalence,
+- correctness of `WHERE` logic,
+- aggregation semantics,
+- optimization,
+- completeness of an answer.
 
-Damit garantiert der Validator:
+This means the validator guarantees:
 
 \[
 SchemaCorrect(q)
 \]
 
-nicht:
+not:
 
 \[
 AnswerCorrect(q,Question).
@@ -782,23 +780,23 @@ AnswerCorrect(q,Question).
 
 ## 5.8 Parser
 
-Der bisherige handgeschriebene Security Validator wird bewusst nur als Allow-/Blocklist verwendet.
+The previous hand-written security validator is deliberately used only as an allow-/blocklist.
 
-Für den Semantic Validator soll die Implementierung so strukturiert sein, dass später ein Cypher-AST-Parser eingebunden werden kann.
+For the Semantic Validator, the implementation should be structured so that a Cypher AST parser can be integrated later.
 
-Für diese Iteration sind zwei Varianten zulässig:
+For this iteration, two variants are permitted:
 
-**Variante A:** eingeschränkte Parser-Implementierung für die vom LLM erlaubte Cypher-Teilmenge.
+**Variant A:** a restricted parser implementation for the subset of Cypher permitted for the LLM.
 
-**Variante B:** etablierter Cypher Parser, sofern Python-Integration praktikabel ist.
+**Variant B:** an established Cypher parser, provided Python integration is practical.
 
-Die Architektur darf nicht von Regex-spezifischem Verhalten abhängen.
+The architecture must not depend on regex-specific behavior.
 
 ---
 
 ## 5.9 Semantic Validator API
 
-Primär intern:
+Primarily internal:
 
 ```python
 class SemanticQueryValidator:
@@ -807,25 +805,25 @@ class SemanticQueryValidator:
         ...
 ```
 
-Optional Debug:
+Optional debug:
 
 ```text
 POST /api/debug/validate-cypher
 ```
 
-nur im Development Mode.
+development mode only.
 
 ---
 
-## 5.10 Fehlerverhalten
+## 5.10 Error Behavior
 
-Bei semantisch falschem Query:
+For a semantically incorrect query:
 
 ```http
 HTTP 422
 ```
 
-Antwort:
+Response:
 
 ```json
 {
@@ -841,7 +839,7 @@ Antwort:
 
 ## 5.11 Tests H2
 
-Mindestens:
+At minimum:
 
 ```text
 Service SENDS Queue              -> valid
@@ -863,44 +861,44 @@ Message CONFORMS_TO Schema       -> valid
 Queue DEAD_LETTERS_TO Queue      -> valid
 ```
 
-Zusätzlich:
+Additionally:
 
-- unbekannte Relation
-- fehlende Labels
-- Alias-Nutzung
-- mehrere MATCH-Blöcke
+- unknown relation
+- missing labels
+- alias usage
+- multiple MATCH blocks
 - OPTIONAL MATCH
-- variable-length traversal, soweit erlaubt.
+- variable-length traversal, where permitted.
 
 ---
 
-## 5.12 Akzeptanzkriterien H2
+## 5.12 Acceptance Criteria H2
 
 **AC-H2-1**  
-Alle freigegebenen Relationstypen besitzen Domain/Range-Definitionen.
+All approved relation types have domain/range definitions.
 
 **AC-H2-2**  
-Der Live-Test-Fehler `Queue -[:SENDS]-> Service` wird automatisch erkannt.
+The live-test error `Queue -[:SENDS]-> Service` is automatically detected.
 
 **AC-H2-3**  
-Gültige A1–A5-Cypher-Queries bleiben zulässig.
+Valid A1–A5 Cypher queries remain permitted.
 
 **AC-H2-4**  
-Unbekannte Relationstypen werden abgelehnt.
+Unknown relation types are rejected.
 
 **AC-H2-5**  
-Security Validator und Semantic Validator werden separat getestet.
+The security validator and semantic validator are tested separately.
 
 **AC-H2-6**  
-Keine semantisch ungültige Query erreicht Neo4j.
+No semantically invalid query reaches Neo4j.
 
 ---
 
-# 6. Teilprojekt H3 – Intent Router
+# 6. Subproject H3 – Intent Router
 
-## 6.1 Problemstellung
+## 6.1 Problem Statement
 
-Das System besitzt bereits fünf verlässliche Analysen:
+The system already has five reliable analyses:
 
 ```text
 A1 Queue Senders
@@ -910,13 +908,13 @@ A4 Queues without Senders
 A5 Blast Radius
 ```
 
-Diese sind reproduzierbar und vollständig unabhängig vom LLM.
+These are reproducible and completely independent of the LLM.
 
-Es ist deshalb unnötig und riskanter, für äquivalente natürlichsprachliche Fragen neues Cypher generieren zu lassen.
+It is therefore unnecessary and riskier to have new Cypher generated for equivalent natural-language questions.
 
 ---
 
-## 6.2 Architekturprinzip
+## 6.2 Architectural Principle
 
 \[
 \boxed{
@@ -926,7 +924,7 @@ DeterministicAnalysis
 }
 \]
 
-und nur:
+and only:
 
 \[
 \boxed{
@@ -938,7 +936,7 @@ LLMGeneratedCypher
 
 ---
 
-## 6.3 Neue Pipeline
+## 6.3 New Pipeline
 
 ```text
 Natural Language Question
@@ -998,7 +996,7 @@ class IntentResult(BaseModel):
     parameters: dict[str, str | int]
 ```
 
-Beispiele:
+Examples:
 
 ```json
 {
@@ -1010,7 +1008,7 @@ Beispiele:
 }
 ```
 
-oder:
+or:
 
 ```json
 {
@@ -1025,17 +1023,17 @@ oder:
 
 ---
 
-## 6.6 Intent-Erkennung
+## 6.6 Intent Recognition
 
-Für A1–A5 wird **kein zweites generatives LLM als Voraussetzung** eingeführt.
+For A1–A5, **no second generative LLM is introduced as a prerequisite**.
 
-Der Router kann zunächst arbeiten mit:
+The router can initially operate with:
 
-1. regelbasierten Patterns,
-2. normalisierter Entity Extraction,
-3. optional LLM Classification nur als Fallback.
+1. rule-based patterns,
+2. normalized entity extraction,
+3. optional LLM classification only as a fallback.
 
-Beispiele:
+Examples:
 
 ```text
 "Who sends to payment-q?"
@@ -1044,7 +1042,7 @@ Beispiele:
 → A1
 
 ```text
-"Welche Services senden an payment-q?"
+"Which services send to payment-q?"
 ```
 
 → A1
@@ -1056,7 +1054,7 @@ Beispiele:
 → A2
 
 ```text
-"Welche Queues haben keinen Consumer?"
+"Which queues have no consumer?"
 ```
 
 → A3
@@ -1068,7 +1066,7 @@ Beispiele:
 → A4
 
 ```text
-"Welche Services hängen vom OrderService ab?"
+"Which services depend on OrderService?"
 ```
 
 → A5
@@ -1077,14 +1075,14 @@ Beispiele:
 
 ## 6.7 Deterministic Query Registry
 
-Neue Komponente:
+New component:
 
 ```text
 analysis/
     registry.py
 ```
 
-Beispiel:
+Example:
 
 ```python
 INTENT_HANDLERS = {
@@ -1105,66 +1103,66 @@ INTENT_HANDLERS = {
 }
 ```
 
-Der Intent Router erzeugt selbst **kein Cypher**.
+The Intent Router itself generates **no Cypher**.
 
-Er wählt eine bestehende getestete Analyse aus.
+It selects an existing, tested analysis.
 
 ---
 
 ## 6.8 Confidence Threshold
 
-Konfiguration:
+Configuration:
 
 ```yaml
 intent-router:
   deterministic-threshold: 0.90
 ```
 
-Wenn:
+If:
 
 \[
 confidence\ge0.90
 \]
 
-wird die deterministische Analyse ausgeführt.
+the deterministic analysis is executed.
 
-Andernfalls:
+Otherwise:
 
 ```text
 UNKNOWN
 ```
 
-und Übergabe an LLM Query Generation.
+and control is handed off to LLM query generation.
 
 ---
 
-## 6.9 Ambiguität
+## 6.9 Ambiguity
 
-Beispiel:
+Example:
 
 > What depends on payment?
 
-kann bedeuten:
+could mean:
 
 - Queue `payment-q`,
 - Service `PaymentService`,
 - Message `PaymentRequested`.
 
-Der Router darf hier nicht raten.
+The router must not guess here.
 
-Ergebnis:
+Result:
 
 ```text
 UNKNOWN
 ```
 
-oder:
+or:
 
 ```text
 AMBIGUOUS
 ```
 
-Optional spätere Erweiterung:
+Optional future extension:
 
 ```python
 AMBIGUOUS = "AMBIGUOUS"
@@ -1174,7 +1172,7 @@ AMBIGUOUS = "AMBIGUOUS"
 
 ## 6.10 Entity Resolution
 
-Der Router benötigt Zugriff auf bekannte Graph-Entities:
+The router needs access to known graph entities:
 
 ```text
 Service
@@ -1182,29 +1180,29 @@ Queue
 Message
 ```
 
-Beispiel:
+Example:
 
 ```text
 payment q
 ```
 
-soll normalisiert werden zu:
+should be normalized to:
 
 ```text
 payment-q
 ```
 
-wenn genau eine eindeutige Queue existiert.
+if exactly one unambiguous queue exists.
 
-Nicht erlaubt:
+Not permitted:
 
-unsichere automatische Zuordnung bei mehreren Treffern.
+unsafe automatic assignment when there are multiple matches.
 
 ---
 
 ## 6.11 Query Response
 
-Antwort soll zusätzlich enthalten:
+The response should additionally contain:
 
 ```json
 {
@@ -1218,7 +1216,7 @@ Antwort soll zusätzlich enthalten:
 }
 ```
 
-Beim LLM:
+For the LLM:
 
 ```json
 {
@@ -1228,17 +1226,17 @@ Beim LLM:
 }
 ```
 
-Damit ist für Benutzer und Tests immer sichtbar:
+This makes it always visible to users and tests:
 
 \[
-\text{Wie wurde die Antwort erzeugt?}
+\text{How was the answer generated?}
 \]
 
 ---
 
 ## 6.12 UI
 
-Die Query-Seite zeigt:
+The query page shows:
 
 ```text
 Question
@@ -1256,7 +1254,7 @@ Result
 unknown-producer-q
 ```
 
-Bei freiem Query:
+For a free-form query:
 
 ```text
 Execution
@@ -1268,24 +1266,24 @@ Semantic validation: passed
 
 ---
 
-## 6.13 Der konkrete Live-Test muss danach anders laufen
+## 6.13 The Concrete Live Test Must Subsequently Behave Differently
 
-Die zuvor problematische Frage:
+The previously problematic question:
 
 > What queues have a consumer but no known sender?
 
-soll künftig ergeben:
+should henceforth result in:
 
 ```text
 Intent:
 A4_QUEUES_WITHOUT_SENDERS
 ```
 
-und direkt die bestehende Analyse ausführen.
+and directly execute the existing analysis.
 
-Damit wird überhaupt kein generiertes Cypher mehr benötigt.
+This means no generated Cypher is needed at all anymore.
 
-Erwartetes Resultat:
+Expected result:
 
 ```text
 unknown-producer-q
@@ -1293,36 +1291,36 @@ unknown-producer-q
 
 ---
 
-## 6.14 Akzeptanzkriterien H3
+## 6.14 Acceptance Criteria H3
 
 **AC-H3-1**  
-Alle A1–A5-Analysen besitzen einen Intent.
+All A1–A5 analyses have an intent.
 
 **AC-H3-2**  
-Deutsch- und englischsprachige Standardformulierungen werden erkannt.
+German- and English-language standard phrasings are recognized.
 
 **AC-H3-3**  
-Bekannte Intents erzeugen kein LLM-Cypher.
+Known intents do not generate LLM Cypher.
 
 **AC-H3-4**  
-A1–A5 liefern über `/api/query` dasselbe Ergebnis wie ihre deterministischen REST-Endpunkte.
+A1–A5 return the same result via `/api/query` as their deterministic REST endpoints.
 
 **AC-H3-5**  
-Unsichere Fragen werden als `UNKNOWN` behandelt.
+Uncertain questions are treated as `UNKNOWN`.
 
 **AC-H3-6**  
-Das Execution Mode Feld zeigt `DETERMINISTIC` oder `LLM`.
+The execution mode field shows `DETERMINISTIC` or `LLM`.
 
 **AC-H3-7**  
-Der in Iteration 9 beobachtete A4-Fehler ist über den normalen NL-Endpunkt nicht mehr reproduzierbar.
+The A4 error observed in Iteration 9 is no longer reproducible via the normal NL endpoint.
 
 ---
 
-# 7. Zusammenspiel der drei Erweiterungen
+# 7. Interaction of the Three Extensions
 
-Das neue System hat anschließend drei Sicherheits-/Vertrauensstufen.
+The new system then has three levels of safety/trust.
 
-## Stufe 1 – Evidenz
+## Level 1 – Evidence
 
 \[
 \boxed{
@@ -1330,7 +1328,7 @@ Where\ did\ this\ fact\ come\ from?
 }
 \]
 
-## Stufe 2 – deterministische Semantik
+## Level 2 – Deterministic Semantics
 
 \[
 \boxed{
@@ -1338,7 +1336,7 @@ Is\ there\ already\ a\ trusted\ analysis?
 }
 \]
 
-## Stufe 3 – kontrollierte generative Abfrage
+## Level 3 – Controlled Generative Query
 
 \[
 \boxed{
@@ -1347,7 +1345,7 @@ syntactically,\ safely\ and\ structurally\ valid?
 }
 \]
 
-Gesamt:
+Overall:
 
 ```text
 Question
@@ -1369,7 +1367,7 @@ Intent Router
                            Neo4j
 ```
 
-Alle resultierenden Fakten besitzen wiederum:
+All resulting facts, in turn, possess:
 
 ```text
 Evidence
@@ -1377,7 +1375,7 @@ Evidence
 
 ---
 
-# 8. Neue Python-Paketstruktur
+# 8. New Python Package Structure
 
 ```text
 app/
@@ -1426,9 +1424,9 @@ app/
 
 ---
 
-# 9. Überarbeiteter QuestionService
+# 9. Revised QuestionService
 
-Konzeptionell:
+Conceptually:
 
 ```python
 def ask(question: str) -> ArchitectureAnswer:
@@ -1461,51 +1459,51 @@ def ask(question: str) -> ArchitectureAnswer:
     )
 ```
 
-Das LLM ist jetzt tatsächlich:
+The LLM is now truly:
 
 \[
 fallback
 \]
 
-und nicht der Standardpfad.
+and not the default path.
 
 ---
 
-# 10. Teststrategie
+# 10. Test Strategy
 
-Die bestehende Testsuite darf nicht ersetzt werden.
+The existing test suite must not be replaced.
 
-Neue Tests kommen hinzu.
+New tests are added.
 
 ## Unit
 
 ### Evidence
 
-- ID-Erzeugung
+- ID generation
 - Merge
 - Reconciliation
-- Mehrfachquellen
+- Multiple sources
 
 ### Semantic Validator
 
-mindestens 30 positive/negative Fälle.
+at least 30 positive/negative cases.
 
 ### Intent Router
 
-mindestens:
+at least:
 
-- 5 Intents
+- 5 intents
 - DE/EN
-- Synonyme
-- Entity Extraction
-- Ambiguität
+- synonyms
+- entity extraction
+- ambiguity
 - UNKNOWN
 
 ---
 
 ## Integration
 
-Mit realem Neo4j:
+With real Neo4j:
 
 ```text
 Import
@@ -1515,7 +1513,7 @@ Evidence persisted
 Query
 ```
 
-sowie:
+as well as:
 
 ```text
 NL Question
@@ -1529,9 +1527,9 @@ exact expected results
 
 ---
 
-## Regression Test des Live-Fehlers
+## Regression Test of the Live Error
 
-Expliziter Test:
+Explicit test:
 
 ```python
 question = (
@@ -1540,7 +1538,7 @@ question = (
 )
 ```
 
-Erwartung:
+Expectation:
 
 ```text
 executionMode = DETERMINISTIC
@@ -1548,36 +1546,36 @@ intent        = A4_QUEUES_WITHOUT_SENDERS
 result        = ["unknown-producer-q"]
 ```
 
-Es darf **kein** `generate_cypher()` aufgerufen werden.
+`generate_cypher()` must **not** be called.
 
 ---
 
-# 11. Neue Akzeptanzkriterien
+# 11. New Acceptance Criteria
 
-Die Iteration gilt als abgeschlossen, wenn:
+The iteration is considered complete when:
 
-| ID | Kriterium |
+| ID | Criterion |
 |---|---|
-| H1.1 | Provenance ist in Neo4j querybar |
-| H1.2 | Jede wesentliche Relation besitzt Evidence |
-| H1.3 | Evidence-Revisionswechsel wird reconciled |
-| H1.4 | ursprüngliches AC13 ist vollständig erfüllt |
-| H2.1 | Domain/Range aller Graphrelationen definiert |
-| H2.2 | falsche Relationsrichtung wird erkannt |
-| H2.3 | unbekannte Relations werden blockiert |
-| H2.4 | semantisch ungültiges Cypher erreicht Neo4j nicht |
-| H3.1 | A1–A5 besitzen deterministic intents |
-| H3.2 | bekannte Fragen umgehen die LLM-Query-Generation |
-| H3.3 | UNKNOWN benutzt weiterhin kontrolliertes LLM-Cypher |
-| H3.4 | `/api/query` zeigt Execution Mode |
-| H3.5 | Live-A4-Regressionstest liefert korrektes Ergebnis |
-| H3.6 | bestehende 198 Tests bleiben grün |
+| H1.1 | Provenance is queryable in Neo4j |
+| H1.2 | Every essential relation possesses evidence |
+| H1.3 | Evidence revision changes are reconciled |
+| H1.4 | the original AC13 is fully met |
+| H2.1 | Domain/range of all graph relations defined |
+| H2.2 | incorrect relation direction is detected |
+| H2.3 | unknown relations are blocked |
+| H2.4 | semantically invalid Cypher does not reach Neo4j |
+| H3.1 | A1–A5 possess deterministic intents |
+| H3.2 | known questions bypass LLM query generation |
+| H3.3 | UNKNOWN continues to use controlled LLM Cypher |
+| H3.4 | `/api/query` shows execution mode |
+| H3.5 | the live A4 regression test yields the correct result |
+| H3.6 | the existing 198 tests remain green |
 
 ---
 
-# 12. Empfohlene Implementierungsreihenfolge
+# 12. Recommended Implementation Order
 
-Die drei Punkte werden nicht parallel implementiert.
+The three points are not implemented in parallel.
 
 ## Iteration 10A – Evidence
 
@@ -1593,7 +1591,7 @@ Reconciliation
 Evidence API/UI
 ```
 
-Ziel:
+Goal:
 
 \[
 AC13=\checkmark
@@ -1611,9 +1609,9 @@ Domain/Range checking
 Integration into QuestionService
 ```
 
-Ziel:
+Goal:
 
-Der in Iteration 9 beobachtete falsche `SENDS`-Pfad wird blockiert.
+The incorrect `SENDS` path observed in Iteration 9 is blocked.
 
 ## Iteration 10C – Intent Router
 
@@ -1627,15 +1625,15 @@ Deterministic Query Registry
 QuestionService routing
 ```
 
-Ziel:
+Goal:
 
-Der problematische Query wird im Normalfall gar nicht mehr vom LLM erzeugt.
+The problematic query is, under normal circumstances, no longer generated by the LLM at all.
 
 ---
 
 # 13. Definition of Done
 
-Nach Abschluss lautet die Architecture-Query-Pipeline:
+Upon completion, the architecture query pipeline is:
 
 \[
 \boxed{
@@ -1650,7 +1648,7 @@ LLMQuery
 }
 \]
 
-für LLM-Queries zusätzlich:
+additionally for LLM queries:
 
 \[
 \boxed{
@@ -1664,7 +1662,7 @@ Neo4j
 }
 \]
 
-und für alle Architekturinformationen:
+and for all architecture information:
 
 \[
 \boxed{
@@ -1676,13 +1674,13 @@ Source
 }
 \]
 
-Damit verändert sich die Plattform qualitativ von:
+This qualitatively transforms the platform from:
 
 \[
 \text{Architecture Graph + AI Query}
 \]
 
-zu:
+to:
 
 \[
 \boxed{
@@ -1694,4 +1692,4 @@ zu:
 }
 \]
 
-Das ist die stabile Grundlage, bevor OpenTelemetry und damit `OBSERVED` Architecture Facts hinzukommen.
+This is the stable foundation before OpenTelemetry, and with it `OBSERVED` architecture facts, are added.
