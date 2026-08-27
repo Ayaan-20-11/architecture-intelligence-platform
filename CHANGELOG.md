@@ -10,8 +10,7 @@ aren't yet guaranteed stable pre-1.0.
 ## [Unreleased]
 
 Everything below ships in the first public release. This heading becomes `[0.1.0] - <date>` at the
-point the tag is actually cut (see `IMPLEMENTATION_PLAN.md`'s 12F entry for the release-gate
-assessment behind that decision).
+point the tag is actually cut.
 
 ### Added
 

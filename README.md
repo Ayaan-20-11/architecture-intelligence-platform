@@ -213,12 +213,11 @@ public issues — see [`SECURITY.md`](SECURITY.md). This project follows the
 ## Project Status
 
 The original PoC (Canonical Model, OpenAPI/AsyncAPI/manifest ingestion, Neo4j graph, five
-deterministic analyses, LLM query layer), the H1-H4 hardening/OpenTelemetry iterations, and the full
-11H runtime-correctness roadmap (evidence reconciliation, cross-batch correlation, partial
-instrumentation, observed provider relations, coverage qualification, the Collector-based demo) are
-all complete. H5 (open-source readiness — this document, `docs/`, licensing, CI, community files) is
-in progress. See [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) for the full iteration-by-iteration
-build history.
+deterministic analyses, LLM query layer), the H1-H4 hardening/OpenTelemetry iterations, the full 11H
+runtime-correctness roadmap (evidence reconciliation, cross-batch correlation, partial
+instrumentation, observed provider relations, coverage qualification, the Collector-based demo), and
+H5 (open-source readiness — this document, `docs/`, licensing, CI, community files) are all complete.
+See [`ROADMAP.md`](ROADMAP.md) for what's shipped and what's planned next.
 
 ## License
 

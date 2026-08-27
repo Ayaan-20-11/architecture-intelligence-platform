@@ -2,7 +2,7 @@ name: CI
 
 # H5 spec §26: checkout -> Python setup -> {dependency install, ruff check, ruff format --check,
 # unit tests, integration tests}. Must run the full H1-H4 + 11H test baseline (spec doesn't pin an
-# exact test count - see IMPLEMENTATION_PLAN.md for the current count per iteration).
+# exact test count - see CHANGELOG.md for what shipped in each release).
 on:
   push:
   pull_request:

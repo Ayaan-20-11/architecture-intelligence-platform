@@ -2,8 +2,8 @@
 
 ## Versioning
 
-[Semantic Versioning](https://semver.org/). The first public release is `v0.1.0` (or
-`v0.1.0-alpha.1` — see `IMPLEMENTATION_PLAN.md`'s 12F entry for that call).
+[Semantic Versioning](https://semver.org/). The first public release is `v0.1.0`, cut as
+`v0.1.0-alpha.1` first to validate the release pipeline end-to-end before promotion.
 
 Not yet guaranteed stable pre-1.0 — expect breaking changes on a minor version bump:
 

@@ -4,9 +4,17 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+dist/
+build/
 
 # uv / venv
 .venv/
+venv/
 .python-version
 
 # Environment secrets (spec: NEO4J_USER, NEO4J_PASSWORD, ANTHROPIC_API_KEY)
@@ -14,14 +22,50 @@ __pycache__/
 .env.*
 !.env.example
 
+# Private keys / certificates / credential bundles - never committed regardless of content
+*.key
+*.p12
+*.pfx
+*.jks
+secrets/
+credentials/
+
 # Local Neo4j data (docker-compose volumes)
 neo4j-data/
 neo4j-logs/
+neo4j-import/
+volumes/
+
+# Runtime telemetry captures - this project's demo data is synthetic-by-construction (generated,
+# never captured), so a real capture landing here would be exactly the kind of file that must never
+# be tracked (spec 12G §10C)
+trace-dumps/
+otel-dumps/
+
+# Local security-scan artifacts (pip-audit/Trivy/CodeQL run locally, not meant to be versioned)
+*.sarif
+security-reports/
+codeql-db/
+
+# Local Docker Compose overrides
+docker-compose.override.yml
 
 # Editors / OS
 .vscode/
 .idea/
+*.iml
 .DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs / temporary output
+*.log
+*.tmp
+*.bak
+*.swp
+*.pid
+logs/
+tmp/
 
 # PDF Windows zone-identifier stream
 *:Zone.Identifier

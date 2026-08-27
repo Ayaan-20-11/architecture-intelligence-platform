@@ -9,9 +9,9 @@ This repository currently contains **no source code** — only the design docume
 no application code, no tests, and no git history yet. Treat this as a greenfield implementation:
 the spec below is the authoritative design to implement against, not a description of existing code.
 
-See `IMPLEMENTATION_PLAN.md` for the spec's 9 iterations broken into concrete, file-level engineering
-tasks (with acceptance-criteria/validation-rule traceability) — start there before re-deriving a plan
-from the PDF.
+See `docs/` (architecture, canonical model, graph/evidence model, ingestion, analyses, adapter
+development) and `ROADMAP.md` for the current state of the system before re-deriving a plan from the
+PDF.
 
 Because no build system exists yet, there are no real build/lint/test commands to document. Once a
 `pyproject.toml` is created, it should follow the stack in the spec (Section 3): Python 3.13, FastAPI,
