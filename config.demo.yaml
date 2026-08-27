@@ -1,0 +1,34 @@
+# Runtime demo configuration (examples/runtime-demo/, docker-compose.demo.yml). Identical to
+# config.yaml except runtime_analysis.default_environment, which must match the "demo" environment
+# tag traffic_generator.py sends (DEMO_ENVIRONMENT=demo) - otherwise every O1-O5 analysis and the
+# natural-language query page (which has no per-question environment override) silently queries
+# the wrong environment and returns zero rows, even though CONFIRMED/OBSERVED_ONLY data exists.
+architecture_intelligence:
+  sources:
+    directories:
+      - examples
+  graph:
+    uri: bolt://localhost:7687
+    database: neo4j
+    max_traversal_depth: 5
+  import:
+    openapi: true
+    asyncapi: true
+    architecture_manifest: true
+  llm:
+    enabled: true
+    max_result_rows: 100
+  intent_router:
+    deterministic_threshold: 0.9
+  telemetry:
+    service_aliases: {}
+    queue_aliases: {}
+    http-correlation:
+      enabled: true
+      ttl-seconds: 60
+      max-pending-spans: 10000
+    coverage:
+      qualification-enabled: true
+  runtime_analysis:
+    default_window_hours: 24
+    default_environment: demo

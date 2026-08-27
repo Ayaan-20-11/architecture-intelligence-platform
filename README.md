@@ -167,7 +167,10 @@ generator's traffic lands — a live demonstration of the `DECLARED + OBSERVED -
 later reimport with a declaration removed, `-> OBSERVED_ONLY` transition described above. The
 generator also emits an undeclared `OrderService -> LegacyPricingService` call (surfacing as
 `OBSERVED_ONLY` on its own, with no reimport needed) and periodically splits one CLIENT/SERVER pair
-across two OTLP requests to demonstrate cross-batch correlation. See
+across two OTLP requests to demonstrate cross-batch correlation. The same states are also visible in
+the web UI at <http://localhost:8000/> — the Service Explorer shows declared vs. observed side by
+side, and <http://localhost:8000/query> answers questions like "Which dependencies are observed but
+undocumented?" without needing an LLM configured. See
 [`examples/runtime-demo/README.md`](examples/runtime-demo/README.md) for the full step-by-step
 walkthrough — every state (`CONFIRMED`, `OBSERVED_ONLY`, `NOT_OBSERVED_IN_WINDOW`) and the
 reconciliation scenario, each with exact `curl` commands and expected results.

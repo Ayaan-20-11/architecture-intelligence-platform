@@ -3,7 +3,9 @@
 This walks through the Collector-based runtime demo (H5 spec §15) end-to-end: bringing up the
 stack, and then observing all three declared-vs-observed states —
 [`CONFIRMED`, `OBSERVED_ONLY`, `NOT_OBSERVED_IN_WINDOW`](../../README.md#declared-vs-observed) —
-plus the 11H evidence-reconciliation invariant, using nothing but `curl` against AIP's own API.
+plus the 11H evidence-reconciliation invariant. Steps 1-6 and 8 use `curl` against AIP's own API;
+step 7 shows the same data through the web UI at <http://localhost:8000/>, including a natural
+language query.
 
 Topology (see `traffic_generator.py`'s docstring for the exact spans it sends):
 
@@ -81,7 +83,38 @@ Returns `order-service -> LegacyPricingService` (via the runtime-discovered `GET
 operation) — observed, but declared nowhere in `examples/`. This is the "most important H4
 analysis" per spec §44: a real dependency the architecture manifest doesn't know about.
 
-## 7. Cross-batch correlation (optional, spec §15's last paragraph)
+## 7. Using the web UI
+
+Everything above is also visible through AIP's own minimal UI, at <http://localhost:8000/>:
+
+- **<http://localhost:8000/services/service:order-service>** — the Service Explorer for
+  `order-service`. Shows Declared and Observed side by side: `ProductService`/`payment-q` appear
+  under both (that's `CONFIRMED`), and `LegacyPricingService` appears only under Observed — the
+  same `OBSERVED_ONLY` finding from step 6, now visible in context rather than as a bare API
+  response.
+- **<http://localhost:8000/queues/queue:payment-q>** — the Queue Explorer, showing `payment-q`'s
+  senders/consumers/messages.
+- **<http://localhost:8000/query>** — the natural language query page. Type a question (or use one
+  of these directly, e.g.
+  `http://localhost:8000/query?question=Who+sends+to+payment-q%3F`):
+  - `Who sends to payment-q?` — routes deterministically (no LLM needed) to A1, returning
+    `OrderService`.
+  - `Which dependencies are observed but undocumented?` — routes deterministically to O3, and
+    returns the same `OrderService -> LegacyPricingService` finding as step 6.
+
+  Both questions work with **no `OPENAI_API_KEY` configured** — they match the deterministic intent
+  router (`app/intent/patterns.py`) directly, per spec's LLM-optional guarantee. A genuinely
+  open-ended question that doesn't match a known pattern still needs an LLM provider, and returns a
+  `503` explaining that rather than failing silently if one isn't configured.
+
+  This only works out of the box because `docker-compose.demo.yml` points AIP at
+  `config.demo.yaml` instead of the root `config.yaml` — the demo tags all traffic with
+  `environment=demo` (`DEMO_ENVIRONMENT` in `docker-compose.demo.yml`), but the query page has no
+  per-question environment override and otherwise defaults to `config.yaml`'s
+  `runtime_analysis.default_environment: production`, which would silently return zero rows against
+  demo data. `config.demo.yaml` is identical to `config.yaml` except that one value.
+
+## 8. Cross-batch correlation (optional, spec §15's last paragraph)
 
 Every 4th cycle, `traffic_generator.py` sends the OrderService/ProductService CLIENT and SERVER
 spans as **two separate OTLP requests**, a few seconds apart, instead of bundled in one — well
@@ -96,7 +129,7 @@ request` lines. The `confirmed` query in step 5 keeps returning the same single
 `order-service -> product-service.getProduct` relation either way — AIP correlates the pair across
 requests rather than requiring them in the same batch.
 
-## 8. The 11H reconciliation scenario
+## 9. The 11H reconciliation scenario
 
 This is the invariant documented in [`docs/graph-model.md`](../../docs/graph-model.md): removing a
 stale declaration degrades a relation from `CONFIRMED` to `OBSERVED_ONLY` — it never deletes the
@@ -133,7 +166,7 @@ relation outright, because observed evidence for it still exists.
 5. Restore `examples/order-service/architecture.yaml` to its original contents (undo step 2) and
    re-run step 3's import to put the fixture back the way the rest of the test suite expects it.
 
-## 9. Cleanup
+## 10. Cleanup
 
 ```bash
 docker compose -f docker-compose.demo.yml down -v

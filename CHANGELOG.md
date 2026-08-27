@@ -67,6 +67,18 @@ Collector-based OpenTelemetry demo topology.
 - `ruff format --check .` failed because ruff 0.16 formats Markdown code fences by default and
   wanted to rewrite `Protocol` stubs inside frozen historical spec documents (12D) — `*.md` is now
   excluded from ruff's formatting scope.
+- `GET /health/neo4j` returned a raw exception message (`str(exc)`) to the caller on failure,
+  which for a Neo4j driver error could include connection details — found by CodeQL
+  (`py/stack-trace-exposure`) on its first run against real GitHub infrastructure (12G). Now
+  logged server-side only; the response is a generic `{"status": "error"}`.
+- `docker-compose.yml` required `OPENAI_API_KEY` (`:?` syntax), contradicting the documented
+  LLM-optional guarantee — a fresh clone following the README's own Quick Start (which leaves the
+  key blank) would fail to start at all. Found via 12G's fresh-clone validation.
+- The natural-language query page and any O1-O5 API call without an explicit `environment`
+  parameter silently returned zero rows against the runtime demo's data, because
+  `config.yaml`'s `runtime_analysis.default_environment` (`production`) didn't match the demo's
+  own `environment=demo` traffic tag. `docker-compose.demo.yml` now points the demo at
+  `config.demo.yaml`, identical except for that one value.
 
 ### Security
 

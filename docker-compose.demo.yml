@@ -20,11 +20,17 @@ services:
       NEO4J_USER: ${NEO4J_USER:-neo4j}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD:?set NEO4J_PASSWORD in .env}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # config.demo.yaml only differs from config.yaml in runtime_analysis.default_environment
+      # (demo, not production) - it must match traffic_generator.py's DEMO_ENVIRONMENT below, or
+      # every O1-O5 analysis (and the NL query page, which has no per-question environment
+      # override) silently queries the wrong environment and returns zero rows.
+      CONFIG_PATH: config.demo.yaml
     # Bind-mounted (read-only) rather than left baked into the image so the 11H reconciliation
     # scenario (examples/runtime-demo/README.md) can edit examples/order-service/architecture.yaml
     # on the host and re-import without an image rebuild.
     volumes:
       - ./examples:/app/examples:ro
+      - ./config.demo.yaml:/app/config.demo.yaml:ro
     depends_on:
       neo4j:
         condition: service_healthy
