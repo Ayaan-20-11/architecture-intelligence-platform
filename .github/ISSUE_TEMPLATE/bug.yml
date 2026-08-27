@@ -1,0 +1,68 @@
+name: Bug report
+description: Report a reproducible problem
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please do **not** use this template for
+        security vulnerabilities — see `SECURITY.md` instead (use GitHub's private vulnerability
+        reporting, under this repository's Security tab).
+
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: Which release, tag, or commit SHA are you on?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - OpenAPI adapter
+        - AsyncAPI adapter
+        - Architecture Manifest adapter
+        - Graph import / Neo4j
+        - Deterministic analyses (A1-A5)
+        - OpenTelemetry / runtime ingestion
+        - Natural language query (LLM layer)
+        - API / UI
+        - Docker / Compose / CI
+        - Documentation
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Minimal steps to reproduce, ideally against `examples/` or an attached fixture.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs / output
+      render: shell
+    validations:
+      required: false

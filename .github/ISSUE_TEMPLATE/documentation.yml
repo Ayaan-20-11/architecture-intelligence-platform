@@ -1,0 +1,39 @@
+name: Documentation issue
+description: Report something missing, unclear, or wrong in the docs
+title: "[Docs]: "
+labels: ["documentation"]
+body:
+  - type: input
+    id: location
+    attributes:
+      label: Location
+      description: File and section (e.g. `docs/opentelemetry.md#correlation-modes`, `README.md#quick-start`)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What's wrong?
+      options:
+        - Missing documentation
+        - Inaccurate / out of date
+        - Unclear / hard to follow
+        - Broken link or example
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested fix (optional)
+    validations:
+      required: false

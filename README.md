@@ -200,8 +200,11 @@ optional — the platform works completely without any LLM provider configured. 
 
 ## Contributing
 
-A dedicated `CONTRIBUTING.md` is planned but not yet published — until then, open an issue or pull
-request as usual.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for development setup, test/lint/format commands, and the
+adapter contribution guide. Questions and ideas go in [Discussions](../../discussions); bugs and
+feature requests use the issue templates. Security vulnerabilities should never be reported as
+public issues — see [`SECURITY.md`](SECURITY.md). This project follows the
+[Contributor Covenant](CODE_OF_CONDUCT.md).
 
 ## Project Status
 

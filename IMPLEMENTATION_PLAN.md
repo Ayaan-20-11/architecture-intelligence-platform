@@ -1317,6 +1317,66 @@ GitHub Actions, not just described.
   deliberately not added to `README.md` - this repository has no `git remote` configured yet, so
   there is no real `owner/repo` path to point a badge at without fabricating one.
 
+## Iteration 12E — Community Readiness (Open Source Readiness)
+`Architecture_Intelligence_Platform_H5_Open_Source_Readiness_Specification.md` §32/§35-40 (SECURITY,
+CONTRIBUTING, PR requirements, community files, issue templates, PR template, good first issues).
+Fifth of six H5 sub-iterations; 12A-12D (`e641370`/`99cb48c`/`b233e40`/`38c4b85`) were committed
+before this one.
+
+**Exit criterion:** a newcomer opening this repository has an unambiguous path in - how to ask a
+question, file a bug, propose a feature or adapter, contribute code, or report a security issue -
+without inventing any of it themselves.
+
+- New root files: `CONTRIBUTING.md` (dev setup, test/lint/format commands, branch workflow, commit
+  expectations, PR checklist mirroring spec §36, adapter contribution guide grounded in
+  `docs/adapter-development.md`), `SECURITY.md` (spec §32), `CODE_OF_CONDUCT.md` (Contributor
+  Covenant v2.1, standard/unmodified except the enforcement contact), `SUPPORT.md` (spec §37's
+  fourth community file).
+- **Asked the user, rather than assuming, how to handle SECURITY.md's contact channel** - publishing
+  a real personal email in a public OSS file forever is exactly the kind of call that isn't mine to
+  make silently. Chose: GitHub's private vulnerability reporting (Security tab) only, no email
+  published. `CODE_OF_CONDUCT.md`'s enforcement contact follows the same choice for consistency
+  (private GitHub report rather than a personal address) - there's no known GitHub handle to name
+  either, since this repo has no remote yet.
+- `.github/ISSUE_TEMPLATE/{bug,feature,adapter,documentation}.yml` (spec §38's exact four files, as
+  GitHub issue *forms* - structured fields, not free-text templates) and
+  `.github/pull_request_template.md` (spec §39's exact five checkboxes).
+- **Caught and fixed a real dead-link risk before committing**: issue-template body markdown doesn't
+  get the same repo-relative link resolution as a normal file view (GitHub resolves relative links
+  in issue-creation forms differently, and recommends absolute URLs for reliability) - initial drafts
+  used `../../discussions`/`../../SECURITY.md`-style links copied from `SUPPORT.md` (where that
+  pattern *is* correct, since those render as an actual file view two directories under
+  `blob/main/`). Since this repo has no GitHub remote yet, there's no real absolute URL to hardcode
+  either, so the issue templates reference `SECURITY.md`/Discussions by plain filename/name instead
+  of a link. Dropped a planned `.github/ISSUE_TEMPLATE/config.yml` entirely for the same reason -
+  its `contact_links` field requires real absolute URLs, and an `OWNER/REPO` placeholder would have
+  published a dead link.
+- `README.md`'s "Contributing" section rewritten from its 12B-era placeholder ("planned but not yet
+  published") to point at all of the above.
+- Prepared, not yet filed, five good-first-issue candidates (spec §40 - "at least five small,
+  clearly-described tasks before launch") - filing them as real GitHub Issues needs an actual
+  GitHub remote and `gh` auth, neither of which exist in this environment (`git remote -v` is empty;
+  `gh` isn't installed). Recorded here so 12F can file them verbatim once the repo is pushed:
+  1. **[good first issue, help wanted]** Add a `.dockerignore` (confirmed missing) - `.venv`, `.git`,
+     `__pycache__`, `.pytest_cache`, `.ruff_cache` are currently sent into the Docker build context.
+  2. **[good first issue]** Add a `HEALTHCHECK` to the root `Dockerfile` (confirmed missing) using
+     the existing `GET /health` endpoint (`app/main.py`).
+  3. **[good first issue, documentation]** Add a "Troubleshooting" section to
+     `docs/development.md` for common local-dev issues (Neo4j auth, port conflicts, stale `.venv`).
+  4. **[good first issue, documentation, adapter]** `docs/adapter-development.md` currently only
+     describes the `Protocol` contract abstractly - add one small, concrete worked example (a toy
+     adapter, start to finish).
+  5. **[good first issue, documentation]** Add CI/license status badges to `README.md` - explicitly
+     deferred in 12D's own notes pending a real `owner/repo` GitHub path.
+- Explicitly deferred (needs a live GitHub remote, not available in this environment):
+  - Filing the five good-first-issues above as real Issues, and applying spec §40's four labels
+    (`good first issue`/`help wanted`/`documentation`/`adapter`) to the repo.
+  - Enabling GitHub Discussions (spec §37) - a repository setting, not a file.
+  - Repository topics (spec §41) and social preview image (spec §42) - both explicitly out of scope
+    for 12E per the iteration breakdown anyway (12F territory), and both need a live repo regardless.
+- No application code touched; `uv run ruff check .` / `uv run ruff format --check .` still pass
+  (114 files, unchanged from 12D - none of this iteration's new files are Python).
+
 ## Getting started
 
 Iterations 0 and 1 need no Neo4j/Docker and can start immediately:

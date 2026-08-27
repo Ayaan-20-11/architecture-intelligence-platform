@@ -1,0 +1,54 @@
+name: New adapter proposal
+description: Propose a new declared-architecture or runtime-observation source adapter
+title: "[Adapter]: "
+labels: ["enhancement", "adapter"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        See `docs/adapter-development.md` for the two extension points (declared source ->
+        `ArchitectureModel`, runtime source -> `ObservationBatch`) and what every adapter must
+        guarantee (deterministic IDs, traceable evidence, no guessed identities).
+
+  - type: input
+    id: source
+    attributes:
+      label: Source type / format
+      description: e.g. "gRPC/protobuf service definitions", "Terraform-declared queues", "Kafka Connect configs"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Adapter kind
+      options:
+        - Declared architecture source (ArchitectureModel)
+        - Runtime observation source (ObservationBatch)
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What would this adapter extract?
+      description: Which entities/relations (Service, Operation, Queue, Message, Schema, CALLS, SENDS, ...) can this source format reliably express?
+    validations:
+      required: true
+
+  - type: textarea
+    id: overlap
+    attributes:
+      label: Overlap with existing adapters
+      description: Does this duplicate anything OpenAPI/AsyncAPI/the Architecture Manifest (or the OTel adapter) already covers? Adapters should only extract what they can uniquely and reliably derive.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution readiness
+      options:
+        - label: I'm willing to implement this (unit tests + an integration fixture + adapter documentation are required per CONTRIBUTING.md)
+          required: false

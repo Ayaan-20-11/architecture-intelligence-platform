@@ -1,0 +1,44 @@
+name: Feature request
+description: Suggest an enhancement or new capability
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For an open-ended idea you'd rather discuss before writing a formal request, consider
+        starting a Discussion instead (this repository's Discussions tab).
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do that the platform doesn't support today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      description: >-
+        This PoC has a deliberately narrow scope (see CLAUDE.md / the spec's non-goals) - e.g. no
+        Kubernetes/cloud discovery, no vector DB/document RAG, no CI/CD policy gates. Please confirm
+        this request fits within the Canonical Model / graph-first architecture before filing.
+      options:
+        - label: This fits within the existing Canonical Model and graph-based approach, or explains why an exception makes sense.
+          required: true
