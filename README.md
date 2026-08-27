@@ -75,22 +75,8 @@ linting.
 
 The bundled `examples/` fixture is a small, fully synthetic four-service landscape:
 
-```text
-OrderService
-   |
-   +---- REST ----> ProductService
-   |
-   +---- SENDS ---> payment-q
-                        |
-                        v
-                  PaymentService
-                        |
-                        v
-                    invoice-q
-                        |
-                        v
-                  InvoiceService
-```
+![Example topology: OrderService calls ProductService over REST and sends to payment-q, which PaymentService receives from and sends to invoice-q, which InvoiceService receives from.](images/example-topology-light.svg#gh-light-mode-only)
+![Example topology: OrderService calls ProductService over REST and sends to payment-q, which PaymentService receives from and sends to invoice-q, which InvoiceService receives from.](images/example-topology-dark.svg#gh-dark-mode-only)
 
 `unused-q` (a sender with no consumer) and `unknown-producer-q` (a consumer with no known sender) are
 included specifically to exercise the orphan-queue analyses. `POST /api/import` loads all of it in
@@ -123,16 +109,8 @@ ones — never inventing a fact it can't trace back to real telemetry.
 the only thing an OTel Collector forwards to, and its own availability must never affect an
 application's normal observability:
 
-```text
-Applications
-     |
-     v
-OTel Collector
-     |
-     +----> Primary observability backend (Jaeger, Tempo, a vendor APM, ...)
-     |
-     +----> Architecture Intelligence Platform
-```
+![Applications send to an OTel Collector, which forwards in parallel to a primary observability backend and, separately, to Architecture Intelligence Platform.](images/otel-fanout-light.svg#gh-light-mode-only)
+![Applications send to an OTel Collector, which forwards in parallel to a primary observability backend and, separately, to Architecture Intelligence Platform.](images/otel-fanout-dark.svg#gh-dark-mode-only)
 
 Failure isolation, buffering, and retry behavior belong in the Collector/deployment configuration —
 `/v1/traces` does no buffering or retry of its own, by design. Full attribute allowlist, correlation

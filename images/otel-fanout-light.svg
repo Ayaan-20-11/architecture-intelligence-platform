@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 370" role="img" aria-label="Applications send to an OTel Collector, which forwards in parallel to a primary observability backend and, separately, to Architecture Intelligence Platform.">
+  <defs>
+    <marker id="arrow-l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6b7280"/>
+    </marker>
+  </defs>
+  <g font-family="Helvetica, Arial, sans-serif">
+
+    <line x1="320" y1="80" x2="320" y2="124" stroke="#6b7280" stroke-width="2.5" marker-end="url(#arrow-l)"/>
+
+    <line x1="290" y1="200" x2="200" y2="254" stroke="#6b7280" stroke-width="2.5" marker-end="url(#arrow-l)"/>
+    <line x1="350" y1="200" x2="440" y2="254" stroke="#6b7280" stroke-width="2.5" marker-end="url(#arrow-l)"/>
+
+    <rect x="210" y="20" width="220" height="60" rx="10" fill="#f6f7fa" stroke="#d0d5dd" stroke-width="1.5"/>
+    <text x="320" y="57" fill="#1f2430" font-size="18" text-anchor="middle">Applications</text>
+
+    <rect x="210" y="140" width="220" height="60" rx="10" fill="#f6f7fa" stroke="#d0d5dd" stroke-width="1.5"/>
+    <text x="320" y="177" fill="#1f2430" font-size="18" text-anchor="middle">OTel Collector</text>
+
+    <rect x="20" y="260" width="290" height="90" rx="10" fill="#f6f7fa" stroke="#d0d5dd" stroke-width="1.5"/>
+    <text x="165" y="295" fill="#1f2430" font-size="17" text-anchor="middle">Primary observability</text>
+    <text x="165" y="317" fill="#1f2430" font-size="17" text-anchor="middle">backend</text>
+    <text x="165" y="338" fill="#5b6270" font-size="13" text-anchor="middle">(Jaeger, Tempo, a vendor APM, ...)</text>
+
+    <rect x="330" y="260" width="290" height="90" rx="10" fill="#e9edf7" stroke="#8b97b8" stroke-width="1.5"/>
+    <text x="475" y="303" fill="#111524" font-size="17" font-weight="bold" text-anchor="middle">Architecture Intelligence</text>
+    <text x="475" y="326" fill="#111524" font-size="17" font-weight="bold" text-anchor="middle">Platform</text>
+
+  </g>
+</svg>
