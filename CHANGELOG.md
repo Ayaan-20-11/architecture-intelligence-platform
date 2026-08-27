@@ -9,7 +9,12 @@ aren't yet guaranteed stable pre-1.0.
 
 ## [Unreleased]
 
-Nothing yet since `v0.1.0-alpha.1`.
+### Security
+
+- The container ran as `root` — no `USER` instruction in `Dockerfile`. Found via 12G's GHCR
+  pull-and-run verification (spec §29's non-root check). Fixed: builds/runs as a dedicated `app`
+  (uid 1000) user; verified end-to-end (health checks, import, an analysis) both standalone and
+  in the runtime demo (which bind-mounts `examples/` and `config.demo.yaml` from the host).
 
 ## [0.1.0-alpha.1] - 2026-08-27
 
