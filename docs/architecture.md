@@ -57,3 +57,21 @@ Every endpoint is mounted in `app/main.py`; each router lives in its own `app/ap
 See [`analyses.md`](analyses.md) for what each deterministic analysis actually computes,
 [`semantic-validation.md`](semantic-validation.md) for the NL-query pipeline, and
 [`configuration.md`](configuration.md) for every setting that shapes this behavior.
+
+## Architecture principles
+
+Six principles this codebase is built on, each with the reasoning and consequences behind it
+recorded as an Architecture Decision Record under [`adr/`](adr/):
+
+1. Canonical model before backend-specific persistence — [ADR 0002](adr/0002-canonical-model.md)
+   (and [ADR 0001](adr/0001-use-neo4j.md) for why Neo4j is that backend).
+2. Evidence before assertion — [ADR 0003](adr/0003-evidence-as-first-class-concept.md).
+3. Deterministic before generative — [ADR 0004](adr/0004-deterministic-before-generative.md).
+4. LLM output is untrusted — [ADR 0005](adr/0005-llm-is-not-source-of-truth.md).
+5. Declared and observed architecture are independent evidence sources —
+   [ADR 0006](adr/0006-declared-vs-observed.md) (and
+   [ADR 0007](adr/0007-do-not-store-full-traces-in-neo4j.md) for the related rule that runtime
+   observation never means storing raw traces).
+6. The open-source core must work without a commercial API — see
+   [`configuration.md`](configuration.md)'s LLM-optional guarantee, a direct consequence of
+   principle 3.

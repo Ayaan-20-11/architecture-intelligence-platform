@@ -195,8 +195,12 @@ optional — the platform works completely without any LLM provider configured. 
 - [`docs/security-model.md`](docs/security-model.md) — trust boundaries
 - [`docs/development.md`](docs/development.md) — local dev, tests, linting
 - [`docs/adapter-development.md`](docs/adapter-development.md) — extending AIP with a new source
+- [`docs/adr/`](docs/adr/) — Architecture Decision Records: why Neo4j, why a Canonical Model, why
+  the LLM is read-only and never a source of truth, and more
 - [`docs/specifications/`](docs/specifications/) — the original design specifications, as a
   traceable history of how the platform got here
+- [`ROADMAP.md`](ROADMAP.md) / [`CHANGELOG.md`](CHANGELOG.md) — where this is headed, and what's
+  shipped so far
 
 ## Contributing
 

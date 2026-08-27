@@ -1377,6 +1377,101 @@ without inventing any of it themselves.
 - No application code touched; `uv run ruff check .` / `uv run ruff format --check .` still pass
   (114 files, unchanged from 12D - none of this iteration's new files are Python).
 
+## Iteration 12F — Release (Open Source Readiness)
+`Architecture_Intelligence_Platform_H5_Open_Source_Readiness_Specification.md` §43-51/§53 (semantic
+versioning, `CHANGELOG.md`, `ROADMAP.md`, ADRs, pre-release checks, Release Gate, H5 acceptance
+criteria H5.1-H5.34, Definition of Done). Sixth and final H5 sub-iteration; 12A-12E
+(`e641370`/`99cb48c`/`b233e40`/`38c4b85`/`f55bd5f`) were committed before this one. §43-47 aren't
+explicitly assigned to a named sub-iteration in spec §52's diagrams (only 12A-12E are) - grouped
+into 12F here since they're release-adjacent artifacts (versioning *is* literally 12F's "tag ->
+v0.1.0" step; a CHANGELOG documents a release; ADRs justify the decisions being open-sourced).
+
+**Exit criterion:** every H5 acceptance criterion is assessed against the actual current repository
+state (not assumed), release-blocking gaps are fixed, and what's left is either genuinely blocked on
+something this environment doesn't have (a GitHub remote) or is the user's own call to make (cutting
+an actual public release is inherently not something to do silently).
+
+- New root files: `CHANGELOG.md` (Keep a Changelog format, `[Unreleased]` heading - not `[0.1.0]`,
+  since no tag exists yet; becomes the latter at actual tag time) and `ROADMAP.md` (spec §45's exact
+  v0.1/v0.2/Future structure, plus spec §43's versioning/not-yet-stable-surface note at the top).
+- `docs/adr/` - all 8 spec-recommended ADRs (`0001-use-neo4j.md` through
+  `0008-apache-2.0-license.md`), each grounded in decisions already implicit in `CLAUDE.md`/the
+  specs/the code rather than invented after the fact, plus a `docs/adr/README.md` index. Added an
+  "Architecture principles" section to `docs/architecture.md` (spec §47's six principles) linking
+  each to its ADR.
+- **Found and fixed a real repository-completeness gap while running the H5.33 check**: this
+  session's two newest spec documents (`Architecture_Intelligence_Platform_11H_Runtime_
+  Correctness_Robustness_Specification.md`, `..._H5_Open_Source_Readiness_Specification.md`) had
+  been sitting untracked at the repo root since before 12A - every other root-level spec `.md` file
+  is tracked, `IMPLEMENTATION_PLAN.md` cites both of these ~15 times by their root-level path (per
+  12B's own note on why `docs/specifications/` was populated by copy rather than move), and a
+  `diff` confirmed the `docs/specifications/` copies are byte-identical - so this was an oversight,
+  not a deliberate exclusion. Both are now `git add`ed as part of this iteration.
+- Ran the spec §49 pre-release checklist against actual current repository state rather than
+  assuming it passes:
+  - README links / CONTRIBUTING.md / SECURITY.md / SUPPORT.md links: every relative link resolves
+    to a real file (checked programmatically, not eyeballed).
+  - LICENSE present: yes (12A). NOTICE reviewed: yes - deliberately not added; see
+    `docs/adr/0008-apache-2.0-license.md` for why (original work, no upstream `NOTICE` to carry
+    forward, Apache-2.0 doesn't require one for that case). Third-party licenses reviewed: yes
+    (12A, `THIRD_PARTY_LICENSES.md`).
+  - No secrets / no customer names / no internal URLs: re-ran a tracked-content grep for secret-key
+    patterns, `.corp`/`.internal`/ticket-system hostnames, and placeholder customer-name patterns -
+    clean (only synthetic placeholder values like `neo4j_password="ignored"` in test fixtures).
+    `.env` (which holds this developer's real `NEO4J_PASSWORD`/`OPENAI_API_KEY`) is confirmed
+    git-ignored and was never staged in any iteration this session.
+  - Demo works: re-verified in this iteration - `docker build .` succeeds cleanly (same Dockerfile
+    12C already exercised via `docker-compose.demo.yml`); the full runtime demo itself was verified
+    live in 12C and not re-run here since nothing demo-relevant changed.
+  - CI green: the workflows exist and every command they run was re-verified locally
+    (`ruff check .`, `ruff format --check .`, `pytest tests/unit`, `pytest tests/integration` -
+    483 passed) - but **CI has never actually executed on GitHub**, because this repository has no
+    `git remote` configured. "Green" here means "verified to pass the same commands CI runs
+    locally," not "seen passing in the Actions tab."
+  - Docker image builds: yes, verified this iteration (`docker build -t aip-release-check:local .`
+    succeeded; image removed after).
+  - Security docs present: yes (12B `docs/security-model.md`/`docs/opentelemetry.md`, 12E
+    `SECURITY.md`).
+  - 11H runtime-correctness scenarios green: yes - full suite re-run this iteration, 483 passed
+    (352 unit / 131 integration), including the reconciliation and cross-batch-adjacent integration
+    tests from the 11H iterations.
+  - Collector-based runtime demo verified: yes, in 12C (not re-run here - no runtime-demo-relevant
+    code changed since).
+- Release Gate (spec §50) self-assessment - none of the blocking conditions apply to current
+  repository state: no known secret in history (12A's history scan, re-checked above), no unknown
+  ownership/IP issue (12A), license present (12A), no critical failing tests (483 passed), quick
+  start works (`docker build` succeeds; base `docker-compose.yml` uses the same image), no customer
+  data (checked above), no critical unresolved security finding (`pip-audit`: no known
+  vulnerabilities as of 12D), the 11H evidence-reconciliation scenario is green (verified live in
+  12C, re-verified via the full suite here), cross-batch runtime correlation works (verified live in
+  12C), the runtime demo's Collector -> AIP path works (12C).
+- H5 acceptance criteria (§51) self-assessment - H5.1-H5.30 and H5.33: **met**, each traceable to a
+  specific prior iteration or a check performed in this one (full per-criterion mapping was checked
+  against actual current file/code state, not assumed from memory of what earlier iterations
+  claimed to do). Three criteria are **blocked on a live GitHub repository**, which does not exist
+  in this environment (`git remote -v` is empty, no `gh` auth):
+  - H5.31 (repository topics + social preview set) - a GitHub repo setting, not a file; nothing to
+    set it on yet.
+  - H5.32 (≥5 good-first-issue tickets *prepared*) - the content is prepared (12E, five candidates
+    recorded there with real, verified gaps like the missing `.dockerignore`/`HEALTHCHECK`), but
+    filing them as actual GitHub Issues needs a live repo.
+  - H5.34 (first public release *can be* created as `v0.1.0`/`v0.1.0-alpha.1`) - every other
+    criterion and the Release Gate above being clean means this is now true in the "capable of"
+    sense the criterion asks for; actually creating the tag/GitHub Release/GHCR publish is a
+    separate, deliberate action (see below), not something this criterion requires to have already
+    happened.
+- **Deliberately did not tag, push, create a GitHub Release, or publish/announce anything.** Spec
+  §52's 12F chain ends in "tag -> v0.1.0 -> GitHub Release -> GHCR image -> public announcement" -
+  none of that was executed, for two independent reasons: (1) there is no `git remote` configured,
+  so there is nowhere to push a tag or trigger `.github/workflows/docker.yml` (its GHCR-publish
+  trigger requires a `release: published` or `v*` tag push event on an actual GitHub repository);
+  (2) creating a public release and making a public announcement are exactly the kind of externally-
+  visible, hard-to-reverse actions that need the user's own explicit, in-the-moment go-ahead, not an
+  assumption from "implement without prompt" (which was reasonably read as authorizing
+  implementation-approach decisions throughout 12C/12D/12E, not authorization to publish something
+  irreversibly public). What remains is a decision for the user: create the GitHub repository, push
+  `main`, and decide when to actually cut `v0.1.0`.
+
 ## Getting started
 
 Iterations 0 and 1 need no Neo4j/Docker and can start immediately:
