@@ -85,7 +85,7 @@ import json
 from pathlib import Path
 
 from app.canonical import ids
-from app.canonical.model import ArchitectureModel, Operation, Service
+from app.canonical.model import ArchitectureModel, Operation, Relation, Service
 from app.provenance.model import Provenance
 
 
@@ -109,7 +109,7 @@ def parse_toy(
     operations = [
         Operation(
             id=ids.operation_id(
-                service_slug,
+                service.id,
                 entry["method"],
                 entry["path"],
             ),
@@ -131,9 +131,20 @@ def parse_toy(
         source_revision=source_revision,
     )
 
+    relations = [
+        Relation(
+            type="PROVIDES",
+            source_id=service.id,
+            target_id=operation.id,
+            evidence_ids=[evidence.id],
+        )
+        for operation in operations
+    ]
+
     return ArchitectureModel(
         services=[service],
         operations=operations,
+        relations=relations,
         provenance=[evidence],
     )
 ```
