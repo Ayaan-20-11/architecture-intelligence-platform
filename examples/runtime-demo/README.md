@@ -92,7 +92,10 @@ Everything above is also visible through AIP's own minimal UI, at <http://localh
   `order-service`. Shows Declared and Observed side by side: `ProductService`/`payment-q` appear
   under both (that's `CONFIRMED`), and `LegacyPricingService` appears only under Observed — the
   same `OBSERVED_ONLY` finding from step 6, now visible in context rather than as a bare API
-  response.
+  response. `unused-q` also shows up as `NOT_OBSERVED_IN_WINDOW`, since it's declared but never
+  sent to in this demo:
+
+  ![Service Explorer showing OrderService's declared vs. observed dependencies: ProductService and payment-q are CONFIRMED, LegacyPricingService is OBSERVED_ONLY, and unused-q is NOT_OBSERVED_IN_WINDOW.](../../images/runtime-demo-drift.png)
 - **<http://localhost:8000/queues/queue:payment-q>** — the Queue Explorer, showing `payment-q`'s
   senders/consumers/messages.
 - **<http://localhost:8000/query>** — the natural language query page. Type a question (or use one
