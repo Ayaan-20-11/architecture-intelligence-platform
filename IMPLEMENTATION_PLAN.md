@@ -1197,6 +1197,66 @@ sub-iterations; only 12A (Legal & Repository Sanitization, `e641370`) was commit
   Contributing section is worded as a placeholder rather than linking a `CONTRIBUTING.md` that
   doesn't exist yet.
 
+## Iteration 12C — Demo & Quick Start (Open Source Readiness)
+`Architecture_Intelligence_Platform_H5_Open_Source_Readiness_Specification.md` §12-15 (Quick Start,
+demo data/landscape, Collector-based runtime demo), §50 (Release Gate's 11H reconciliation and
+cross-batch scenarios), acceptance criteria implied by H5.6/H5.15/H5.16. Third of six H5
+sub-iterations; 12A (`e641370`) and 12B (`99cb48c`) were committed before this one.
+
+**Exit criterion:** a previously uninvolved developer can run `docker compose -f
+docker-compose.demo.yml up` and, following nothing but `examples/runtime-demo/README.md`, actually
+observe all three declared-vs-observed states plus the two scenarios spec §50 names as release-
+blocking if broken - not just read about them.
+
+- `examples/runtime-demo/traffic_generator.py`:
+  - Adds an `OrderService -> LegacyPricingService` CLIENT/SERVER pair to every cycle (spec §14's
+    "Zusätzlich H4" topology addendum) - `LegacyPricingService` is declared nowhere in `examples/`,
+    so this surfaces as a live `OBSERVED_ONLY` finding instead of something only described in prose.
+  - Adds `send_cross_batch_pair()`, run every 4th cycle: sends the OrderService/ProductService
+    CLIENT and SERVER spans as two separate OTLP requests ~3s apart (well inside the correlation
+    buffer's 60s default TTL) - exercises spec §50's "CLIENT span in request A, SERVER span in
+    request B -> one resolved dependency" release-gate scenario live, not just in the unit tests
+    that already covered `HttpCorrelationBuffer` in isolation.
+  - Adds `wait_for_declared_import()`, blocking the send loop until `service:order-service` shows
+    up via `GET /api/services` before sending anything. **Found by actually running the demo**: with
+    `docker-compose.demo.yml`'s original `depends_on: [otel-collector]` and a 5s traffic interval,
+    the generator's first batch reliably lands *before* a human running the walkthrough manages to
+    call `POST /api/import`. `app/telemetry/service_resolver.py`'s tier-2 match is exact-name and
+    only fires when exactly one Service node has that name; the observed-only path mints its own
+    `service:orderservice` node (slugified) for "OrderService" milliseconds after startup, and the
+    later declared import then creates a *second*, never-merging `service:order-service` node with
+    the same name - two candidates, so tier-2's uniqueness check permanently stops matching. Verified
+    by reproducing this exact split (`MATCH (s:Service) RETURN s.id, s.name` showed both
+    `service:order-service`/`service:orderservice` pairs for all four fixture services) before
+    adding the fix, then confirming a clean `docker compose down -v` + `up` no longer splits them.
+- `docker-compose.demo.yml`: adds `AIP_BASE_URL` (for the new readiness poll) and an explicit
+  `architecture-intelligence` entry in `traffic-generator`'s `depends_on`; adds a read-only
+  `./examples:/app/examples` bind mount on `architecture-intelligence` itself (previously `COPY`'d
+  into the image at build time only) so the reconciliation scenario below can edit
+  `examples/order-service/architecture.yaml` on the host and re-import without an image rebuild.
+- New `examples/runtime-demo/README.md` - full step-by-step walkthrough with literal `curl`
+  commands: import, `NOT_OBSERVED_IN_WINDOW` (checked in the gap before traffic arrives),
+  `CONFIRMED`, `OBSERVED_ONLY`, the cross-batch log lines, and the 11H reconciliation scenario
+  (remove `order-service`'s `calls` entry, `POST /api/import/service/order-service`, watch
+  `product-service` move from `confirmed` to `observed-only`, restore the fixture). Linked from
+  root `README.md`'s "Runtime demo" section.
+- **All of the above was run for real**, not just read for plausibility: `docker compose -f
+  docker-compose.demo.yml up --build`, `POST /api/import`, confirmed `NOT_OBSERVED_IN_WINDOW`
+  immediately after import, confirmed `CONFIRMED`/`OBSERVED_ONLY` after traffic landed, confirmed
+  the cross-batch demo's log lines, then walked the reconciliation scenario end-to-end (edited
+  `architecture.yaml`, reimported, watched `product-service` degrade to `observed-only` via
+  `GET /api/analysis/runtime/{confirmed,observed-only}`, restored the fixture - `git diff` on
+  `examples/order-service/architecture.yaml` is empty). Full suite re-run after: 483 passed
+  (352 unit / 131 integration, unchanged from 12B).
+- Explicitly out of scope / deferred:
+  - Demo screenshot/GIF (spec §48) - spec §48 itself frames this as a "Vor Release" (before-release)
+    requirement, and it isn't in spec §50's release-gate blocking list (unlike the reconciliation and
+    cross-batch scenarios above, which are and are now verified). No headless-browser/screenshot
+    tooling is available in this environment to produce one honestly; deferred to 12F (Release),
+    which is also where repository topics, social preview, and the version tag live per spec §52.
+  - CI/CD, CodeQL, container scanning, GHCR publishing (12D); CONTRIBUTING/SECURITY/CODE_OF_CONDUCT/
+    SUPPORT/issue and PR templates/good-first-issues (12E); CHANGELOG/ROADMAP/release tag (12F).
+
 ## Getting started
 
 Iterations 0 and 1 need no Neo4j/Docker and can start immediately:

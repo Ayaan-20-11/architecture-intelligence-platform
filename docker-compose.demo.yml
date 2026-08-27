@@ -20,6 +20,11 @@ services:
       NEO4J_USER: ${NEO4J_USER:-neo4j}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD:?set NEO4J_PASSWORD in .env}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    # Bind-mounted (read-only) rather than left baked into the image so the 11H reconciliation
+    # scenario (examples/runtime-demo/README.md) can edit examples/order-service/architecture.yaml
+    # on the host and re-import without an image rebuild.
+    volumes:
+      - ./examples:/app/examples:ro
     depends_on:
       neo4j:
         condition: service_healthy
@@ -57,10 +62,12 @@ services:
     build: examples/runtime-demo
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      AIP_BASE_URL: http://architecture-intelligence:8000
       DEMO_ENVIRONMENT: demo
       TRAFFIC_INTERVAL_SECONDS: "5"
     depends_on:
       - otel-collector
+      - architecture-intelligence
 
 volumes:
   neo4j-demo-data:

@@ -164,7 +164,13 @@ tracing backend" in the topology above.
 Once it's running, `POST /api/import` to declare the fixture topology, then watch
 `GET /api/runtime/relations?environment=demo` fill in with `OBSERVED`/`CONFIRMED` relations as the
 generator's traffic lands — a live demonstration of the `DECLARED + OBSERVED -> CONFIRMED` and, on a
-later reimport with a declaration removed, `-> OBSERVED_ONLY` transition described above.
+later reimport with a declaration removed, `-> OBSERVED_ONLY` transition described above. The
+generator also emits an undeclared `OrderService -> LegacyPricingService` call (surfacing as
+`OBSERVED_ONLY` on its own, with no reimport needed) and periodically splits one CLIENT/SERVER pair
+across two OTLP requests to demonstrate cross-batch correlation. See
+[`examples/runtime-demo/README.md`](examples/runtime-demo/README.md) for the full step-by-step
+walkthrough — every state (`CONFIRMED`, `OBSERVED_ONLY`, `NOT_OBSERVED_IN_WINDOW`) and the
+reconciliation scenario, each with exact `curl` commands and expected results.
 
 ## Natural Language Queries
 
