@@ -9,8 +9,12 @@ aren't yet guaranteed stable pre-1.0.
 
 ## [Unreleased]
 
-Everything below ships in the first public release. This heading becomes `[0.1.0] - <date>` at the
-point the tag is actually cut.
+Nothing yet since `v0.1.0-alpha.1`.
+
+## [0.1.0-alpha.1] - 2026-08-27
+
+First public pre-release, cut to validate the complete release pipeline (GitHub Actions, CodeQL,
+GHCR publishing, a fresh-clone Quick Start and runtime demo) before promoting to `v0.1.0`.
 
 ### Added
 
