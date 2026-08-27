@@ -61,3 +61,121 @@ There's no plugin registry yet — a new adapter is wired in the same way the ex
 new module under `app/ingestion/` (or `app/telemetry/` for a runtime source), invoked from
 `app/ingestion/pipeline.py` (or the OTLP request handler in `app/api/telemetry.py`) alongside its
 siblings.
+## Worked example: a tiny declared-source adapter
+
+The following is a deliberately small, non-production example. It shows the complete shape of a
+declared-source adapter without adding another real source format to AIP.
+
+Imagine a toy format called `toy-arch.json`:
+
+```json
+{
+  "service": "checkout",
+  "operations": [
+    {"method": "GET", "path": "/orders"}
+  ]
+}
+```
+
+A toy adapter could read that file, construct canonical IDs, attach provenance, and return an
+`ArchitectureModel`:
+
+```python
+import json
+from pathlib import Path
+
+from app.canonical import ids
+from app.canonical.model import ArchitectureModel, Operation, Service
+from app.provenance.model import Provenance
+
+
+def load_toy_document(path: Path) -> dict:
+    return json.loads(path.read_text())
+
+
+def parse_toy(
+    document: dict,
+    *,
+    source_file: str,
+    source_revision: str | None = None,
+) -> ArchitectureModel:
+    service_slug = document["service"]
+
+    service = Service(
+        id=ids.service_id(service_slug),
+        name=service_slug,
+    )
+
+    operations = [
+        Operation(
+            id=ids.operation_id(
+                service_slug,
+                entry["method"],
+                entry["path"],
+            ),
+            service_id=service.id,
+            method=entry["method"].upper(),
+            path=entry["path"],
+        )
+        for entry in document.get("operations", [])
+    ]
+
+    evidence = Provenance(
+        id=ids.evidence_id(
+            "TOY",
+            service_slug,
+            source_revision,
+        ),
+        source_type="TOY",
+        source_file=source_file,
+        source_revision=source_revision,
+    )
+
+    return ArchitectureModel(
+        services=[service],
+        operations=operations,
+        provenance=[evidence],
+    )
+```
+
+### Why this satisfies the adapter contract
+
+The example follows the same contract as the existing adapters:
+
+- `Service` uses `ids.service_id()`.
+- Each `Operation` uses `ids.operation_id()`.
+- The adapter returns an `ArchitectureModel`.
+- Source provenance is returned with the model.
+- No local filesystem path is used to construct entity IDs.
+- The example does not introduce a new production source format.
+
+### Wiring the adapter into the pipeline
+
+A real adapter would be imported and invoked from `app/ingestion/pipeline.py` alongside the
+existing OpenAPI, AsyncAPI, and manifest adapters.
+
+Conceptually, the pipeline would:
+
+1. Detect the toy source.
+2. Load it with `load_toy_document()`.
+3. Parse it with `parse_toy()`.
+4. Add the returned `ArchitectureModel` to the models being merged.
+
+For example:
+
+```python
+from app.ingestion.toy_adapter import load_toy_document, parse_toy
+
+document = load_toy_document(source.path)
+
+model = parse_toy(
+    document,
+    source_file=str(source.path),
+    source_revision=source.revision,
+)
+
+partials_by_service[source.service_id].append(model)
+```
+
+This example is illustrative only. It does not require creating `toy_adapter.py` or wiring the toy
+format into the production scanner.
