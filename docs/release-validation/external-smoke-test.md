@@ -2,8 +2,8 @@
 
 **Date:** 2026-08-27
 **Repository:** `michaelegner/architecture-intelligence-platform`
-**Commit tested:** `main` @ `7a541a9` (or later — see `git log` if this file predates the exact
-commit at test time)
+**Commit tested:** `main` @ `7a541a93` (exact commit — this file was written and merged one commit
+later, `65264a12`, once the result was known)
 
 Test performed independently of the environment that built and verified the repository (see
 `docs/release-validation/README.md` for why that independence matters — everything else in this
@@ -22,6 +22,7 @@ maintainer intervention.
 
 ## Not yet covered
 
-- `v0.1.0-alpha.2` doesn't exist yet — this smoke test ran against `main` directly, not a tagged
-  release/published GHCR image. `v0.1.0-alpha.2`'s own verification (once cut) will include a fresh
-  pull-and-run check of the actual release artifact.
+- This smoke test ran against `main` directly, not a tagged release/published GHCR image. The
+  tagged-artifact pull-and-run check (authenticated and unauthenticated, non-root confirmation) is
+  covered separately in
+  [`v0.1.0-alpha.2-verification.md`](v0.1.0-alpha.2-verification.md).

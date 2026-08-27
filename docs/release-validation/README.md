@@ -17,6 +17,7 @@ environment, and recording what happened. That's what these files are.
 |---|---|
 | [`v0.1.0-alpha.1-verification.md`](v0.1.0-alpha.1-verification.md) | Fresh-clone Quick Start, fresh-clone runtime demo, GHCR image pull/run (authenticated and unauthenticated), non-root container check, the CodeQL finding found and fixed along the way — plus an explicit release-provenance record distinguishing the original tagged release artifact from the fixes verified afterward on `main`. |
 | [`v0.1.0-alpha.2-verification.md`](v0.1.0-alpha.2-verification.md) | Confirms the two gaps left open by `alpha.1` are closed: exactly one `docker.yml` run fires per release, and the non-root fix is verified against the actual pulled, tagged GHCR image rather than only a local build. |
+| [`v0.1.0-go-no-go.md`](v0.1.0-go-no-go.md) | Pulls every piece of evidence above into one explicit release-readiness call for `v0.1.0` itself. |
 | [`security-settings.md`](security-settings.md) | Repository security feature configuration, verified via the GitHub API rather than assumed. |
 | [`public-repository-content-gate.md`](public-repository-content-gate.md) | Sign-off record for the pre-push secret/customer-data/history review performed before the repository went public. |
 | [`external-smoke-test.md`](external-smoke-test.md) | Result of the clean-environment smoke test performed independently of the environment that built the repository. |
