@@ -18,3 +18,4 @@ environment, and recording what happened. That's what these files are.
 | [`v0.1.0-alpha.1-verification.md`](v0.1.0-alpha.1-verification.md) | Fresh-clone Quick Start, fresh-clone runtime demo, GHCR image pull/run (authenticated and unauthenticated), non-root container check, the CodeQL finding found and fixed along the way — plus an explicit release-provenance record distinguishing the original tagged release artifact from the fixes verified afterward on `main`. |
 | [`security-settings.md`](security-settings.md) | Repository security feature configuration, verified via the GitHub API rather than assumed. |
 | [`public-repository-content-gate.md`](public-repository-content-gate.md) | Sign-off record for the pre-push secret/customer-data/history review performed before the repository went public. |
+| [`external-smoke-test.md`](external-smoke-test.md) | Result of the clean-environment smoke test performed independently of the environment that built the repository. |
