@@ -147,6 +147,12 @@ undocumented?" without needing an LLM configured. See
 walkthrough — every state (`CONFIRMED`, `OBSERVED_ONLY`, `NOT_OBSERVED_IN_WINDOW`) and the
 reconciliation scenario, each with exact `curl` commands and expected results.
 
+The Service Explorer for `OrderService`, mid-demo — `ProductService`/`payment-q` are `CONFIRMED`
+(declared and observed), `LegacyPricingService` is `OBSERVED_ONLY` (a real, undocumented dependency
+the manifest never declared), and `unused-q` is `NOT_OBSERVED_IN_WINDOW`:
+
+![Service Explorer showing OrderService's declared vs. observed dependencies: ProductService and payment-q are CONFIRMED, LegacyPricingService is OBSERVED_ONLY, and unused-q is NOT_OBSERVED_IN_WINDOW.](images/runtime-demo-drift.png)
+
 ## Natural Language Queries
 
 `POST /api/query` answers a plain-language question either by routing it to an existing
