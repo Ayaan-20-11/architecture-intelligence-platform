@@ -1,3 +1,4 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -25,6 +26,7 @@ from app.settings import Settings, load_settings
 from app.telemetry.correlation_buffer import HttpCorrelationBuffer
 
 CONFIG_PATH = Path(os.environ.get("CONFIG_PATH", "config.yaml"))
+logger = logging.getLogger("architecture_intelligence.health")
 
 
 @asynccontextmanager
@@ -93,8 +95,12 @@ def create_app() -> FastAPI:
                 driver, database=settings.config.graph.database, read_only=True
             ) as session:
                 session.run("RETURN 1").consume()
-        except Exception as exc:  # noqa: BLE001 - health check must report any failure, not just specific ones
-            return JSONResponse(status_code=503, content={"status": "error", "detail": str(exc)})
+        except Exception:
+            # CodeQL py/stack-trace-exposure: the exception (which for a Neo4j driver error can
+            # include the bolt URI/hostname) is logged server-side only - an unauthenticated caller
+            # of a health endpoint must never see internal connection detail in the response body.
+            logger.exception("Neo4j health check failed")
+            return JSONResponse(status_code=503, content={"status": "error"})
         return {"status": "ok"}
 
     return app
