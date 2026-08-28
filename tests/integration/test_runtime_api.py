@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -16,8 +16,16 @@ from app.telemetry.model import ObservationBatch, ObservedFactCandidate, Observe
 EXAMPLES_DIR = Path(__file__).resolve().parent.parent.parent / "examples"
 DATABASE = "neo4j"
 ENVIRONMENT = "production"
-TIMESTAMP = datetime(2026, 8, 26, 12, 0, tzinfo=UTC)
-SINCE = datetime(2026, 8, 26, 0, 0, tzinfo=UTC)
+# Relative to real "now", not a hardcoded calendar date: several tests below query through the
+# HTTP API's *default* window (no explicit `since`, including POST /api/query's O3 routing test,
+# which has no since override at all) - a fixed past date silently ages out of that rolling
+# default-window_hours-from-now lookback once enough real time passes, which is exactly what broke
+# here (a hardcoded 2026-08-26 timestamp fell outside the 24h default window on 2026-08-27's CI
+# run - a pre-existing time-bomb, not related to whatever change happened to trigger that run).
+# TIMESTAMP is always a few minutes in the past (never future, regardless of time-of-day when the
+# suite runs); BUCKET_DAY is derived from it so bucket_start <= TIMESTAMP <= bucket_end always holds.
+TIMESTAMP = datetime.now(UTC) - timedelta(minutes=5)
+BUCKET_DAY = TIMESTAMP.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 @pytest.fixture(scope="module")
@@ -37,12 +45,10 @@ def _fact(
     *, subject_id: str, relation_type: str, object_id: str, trace_id: str
 ) -> ObservedFactCandidate:
     evidence = ObservedEvidence(
-        id=ids.observed_evidence_id(
-            ENVIRONMENT, datetime(2026, 8, 26, tzinfo=UTC), subject_id, relation_type, object_id
-        ),
+        id=ids.observed_evidence_id(ENVIRONMENT, BUCKET_DAY, subject_id, relation_type, object_id),
         environment=ENVIRONMENT,
-        bucket_start=datetime(2026, 8, 26, tzinfo=UTC),
-        bucket_end=datetime(2026, 8, 27, tzinfo=UTC),
+        bucket_start=BUCKET_DAY,
+        bucket_end=BUCKET_DAY + timedelta(days=1),
         first_seen=TIMESTAMP,
         last_seen=TIMESTAMP,
         observation_count=721,

@@ -9,12 +9,40 @@ aren't yet guaranteed stable pre-1.0.
 
 ## [Unreleased]
 
-### Security
+## [0.1.0-alpha.2] - 2026-08-27
 
-- The container ran as `root` — no `USER` instruction in `Dockerfile`. Found via 12G's GHCR
-  pull-and-run verification (spec §29's non-root check). Fixed: builds/runs as a dedicated `app`
-  (uid 1000) user; verified end-to-end (health checks, import, an analysis) both standalone and
-  in the runtime demo (which bind-mounts `examples/` and `config.demo.yaml` from the host).
+Second public pre-release, cut specifically to give the fixed release pipeline (single Docker
+workflow trigger) one clean run, and to re-verify the non-root container fix against the actual
+published GHCR image rather than only a local build — both gaps left open by `v0.1.0-alpha.1`'s own
+verification. See
+[`docs/release-validation/v0.1.0-alpha.2-verification.md`](docs/release-validation/v0.1.0-alpha.2-verification.md).
+
+### Fixed
+
+- The container ran as `root` — no `USER` instruction in `Dockerfile`. Found via `v0.1.0-alpha.1`'s
+  GHCR pull-and-run verification (spec §29's non-root check). Fixed: builds/runs as a dedicated `app`
+  (uid 1000) user; verified end-to-end (health checks, import, an analysis) both standalone and in
+  the runtime demo — and now also against the actual pulled, tagged `v0.1.0-alpha.2` GHCR image, not
+  only a local build.
+- `docker.yml` fired twice per release (`release: published` and `push: tags: "v*"` both matched one
+  tag push), racing two builds from the same commit and letting whichever finished last silently
+  overwrite the other's GHCR tag pointer — this is exactly what happened to `v0.1.0-alpha.1`. Now
+  triggered only by `release: published`; confirmed under `v0.1.0-alpha.2`'s own release that exactly
+  one run fires.
+- README Quick Start referenced a placeholder clone URL and the wrong directory name, and never
+  mentioned creating `.env` before `docker compose up`. Fixed with the real clone URL and a
+  documented local-only default password (`.env.example`).
+- `pyproject.toml` still carried the PoC-era package name/description
+  (`architecture-intelligence-poc`); `uv.lock` regenerated to match.
+- `tests/integration/test_runtime_api.py` used hardcoded absolute-datetime fixtures that would
+  silently fall outside the runtime API's default rolling analysis window and start failing CI once
+  enough real time had passed. Fixtures now compute their timestamps relative to "now".
+
+### Added
+
+- Branch protection on `main` (required CI status check, no force-push, no deletion — no required PR
+  review, to preserve the direct-push-to-main workflow used throughout this solo-maintainer project).
+- A demo screenshot in `README.md` and `examples/runtime-demo/README.md`'s runtime demo walkthrough.
 
 ## [0.1.0-alpha.1] - 2026-08-27
 
