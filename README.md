@@ -6,13 +6,73 @@ and discover where declared and observed architecture diverge.
 ![Pipeline: declared sources (OpenAPI, AsyncAPI, architecture.yaml) and observed OpenTelemetry traces both feed the Canonical Architecture Model, which imports into Neo4j, which serves deterministic Cypher analyses and read-only natural-language query.](images/pipeline-light.svg#gh-light-mode-only)
 ![Pipeline: declared sources (OpenAPI, AsyncAPI, architecture.yaml) and observed OpenTelemetry traces both feed the Canonical Architecture Model, which imports into Neo4j, which serves deterministic Cypher analyses and read-only natural-language query.](images/pipeline-dark.svg#gh-dark-mode-only)
 
+**[Quick Start](#quick-start) · [Runtime Demo](#runtime-demo) · [Documentation](#documentation)**
+
 ## Why?
 
-Architecture documentation drifts from reality the moment it's written by hand. AIP builds its
+Hand-maintained architecture documentation tends to drift from the system it describes. AIP builds its
 knowledge graph automatically from artifacts that already exist and are already kept up to date as
 part of normal development — OpenAPI/AsyncAPI specs, a minimal manifest for the one thing they can't
 express (who calls what), and, optionally, real OpenTelemetry traffic — so every fact in the graph
 traces back to real evidence, never to a stale diagram someone forgot to update.
+
+## What makes AIP different?
+
+Traditional architecture documentation describes what a system is supposed to look like. AIP keeps
+declared architecture and runtime observations together, and preserves the evidence behind each
+fact:
+
+| Evidence state | Status |
+|---|---|
+| `DECLARED` + `OBSERVED` | `CONFIRMED` — the documented relationship is also seen at runtime |
+| `OBSERVED` only | `OBSERVED_ONLY` — a real dependency exists but was never declared |
+| `DECLARED` only | `NOT_OBSERVED_IN_WINDOW` — declared, but not seen in this environment/time window |
+
+That's the core idea: not just what the architecture says, but what the system actually does, and
+why AIP believes each relationship exists. See [Declared vs Observed](#declared-vs-observed) below
+for the full semantics.
+
+## Quick Start
+
+Requires Docker and Docker Compose (Python 3.13 only if you want to run it outside a container):
+
+```bash
+git clone https://github.com/michaelegner/architecture-intelligence-platform.git
+cd architecture-intelligence-platform
+cp .env.example .env
+docker compose up
+```
+
+`.env.example`'s `NEO4J_PASSWORD` is a fixed local-only default (`change-me-local`) — fine for
+trying this out, never for anything reachable outside your machine.
+
+Then open <http://localhost:8000>. `config.yaml` already points at this repo's `examples/` fixture
+services, so `POST /api/import` works immediately against them. See
+[`docs/development.md`](docs/development.md) for running locally without Docker, the test suite, and
+linting.
+
+After importing the bundled example, open the Service Explorer to inspect the architecture graph.
+For the full declared-vs-observed experience — `CONFIRMED`, `OBSERVED_ONLY`, and
+`NOT_OBSERVED_IN_WINDOW` relations, not just declared ones — run the
+[runtime demo](#runtime-demo) below; it adds synthetic OpenTelemetry traffic on top of the same
+fixture.
+
+## What you'll see
+
+AIP shows declared and observed architecture side by side. In the bundled runtime demo:
+
+- `OrderService -> ProductService` is `CONFIRMED` — declared and observed.
+- `OrderService -> LegacyPricingService` is `OBSERVED_ONLY` — a real dependency the manifest never
+  declared.
+- `unused-q` is `NOT_OBSERVED_IN_WINDOW` — declared, but not observed in this environment/time
+  window.
+
+![Service Explorer showing OrderService's declared vs. observed dependencies: ProductService and
+payment-q are CONFIRMED, LegacyPricingService is OBSERVED_ONLY, and unused-q is
+NOT_OBSERVED_IN_WINDOW.](images/runtime-demo-drift.png)
+
+See the [runtime demo](#runtime-demo) for the full walkthrough, or
+[`examples/runtime-demo/README.md`](examples/runtime-demo/README.md) directly.
 
 ## Features
 
@@ -55,25 +115,6 @@ manifest), `OBSERVED` (from real telemetry), or both. That's what turns into a s
 Removing a stale declaration never deletes a relation that still has observed evidence — it degrades
 `CONFIRMED` to `OBSERVED_ONLY` instead. See [`docs/graph-model.md`](docs/graph-model.md) for the
 exact invariant this guarantees and why it matters.
-
-## Quick Start
-
-Requires Docker and Docker Compose (Python 3.13 only if you want to run it outside a container):
-
-```bash
-git clone https://github.com/michaelegner/architecture-intelligence-platform.git
-cd architecture-intelligence-platform
-cp .env.example .env
-docker compose up
-```
-
-`.env.example`'s `NEO4J_PASSWORD` is a fixed local-only default (`change-me-local`) — fine for
-trying this out, never for anything reachable outside your machine.
-
-Then open <http://localhost:8000>. `config.yaml` already points at this repo's `examples/` fixture
-services, so `POST /api/import` works immediately against them. See
-[`docs/development.md`](docs/development.md) for running locally without Docker, the test suite, and
-linting.
 
 ## Example
 
@@ -147,11 +188,8 @@ undocumented?" without needing an LLM configured. See
 walkthrough — every state (`CONFIRMED`, `OBSERVED_ONLY`, `NOT_OBSERVED_IN_WINDOW`) and the
 reconciliation scenario, each with exact `curl` commands and expected results.
 
-The Service Explorer for `OrderService`, mid-demo — `ProductService`/`payment-q` are `CONFIRMED`
-(declared and observed), `LegacyPricingService` is `OBSERVED_ONLY` (a real, undocumented dependency
-the manifest never declared), and `unused-q` is `NOT_OBSERVED_IN_WINDOW`:
-
-![Service Explorer showing OrderService's declared vs. observed dependencies: ProductService and payment-q are CONFIRMED, LegacyPricingService is OBSERVED_ONLY, and unused-q is NOT_OBSERVED_IN_WINDOW.](images/runtime-demo-drift.png)
+The Service Explorer shows the same declared-vs-observed states illustrated in
+[What you'll see](#what-youll-see), while the walkthrough above explains how each state is produced.
 
 ## Natural Language Queries
 
